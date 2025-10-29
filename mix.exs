@@ -14,7 +14,8 @@ defmodule LeXtract.MixProject do
 
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:logger],
+      mod: {LeXtract.Application, []}
     ]
   end
 
@@ -23,9 +24,13 @@ defmodule LeXtract.MixProject do
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false, warn_if_outdated: true},
+      {:mimic, "~> 2.0", only: :test},
+      {:nimble_options, "~> 1.1"},
       {:req_llm, "~> 1.0.0-rc.7"},
       {:text_chunker, "~> 0.5.2"},
-      {:tokenizers, "~> 0.5.1"}
+      {:tokenizers, "~> 0.5.1"},
+      {:uuid_v7, "~> 0.6.0"},
+      {:yaml_elixir, "~> 2.11"}
     ]
   end
 
