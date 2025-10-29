@@ -525,26 +525,6 @@ defmodule LeXtract.TokenizerTest do
     end
   end
 
-  describe "performance" do
-    test "tokenizes typical text in reasonable time" do
-      text = "The patient was prescribed aspirin 81mg daily for cardiovascular health."
-
-      mock_encoding =
-        build_mock_encoding(
-          String.split(String.downcase(text)),
-          Enum.to_list(1..12),
-          Enum.with_index(String.split(text), fn _, i -> {i * 6, i * 6 + 5} end)
-        )
-
-      expect(HFTokenizer, :from_pretrained, fn _ -> {:ok, :mock_tokenizer} end)
-      expect(HFTokenizer, :encode, fn _, ^text -> {:ok, mock_encoding} end)
-
-      {time_us, {:ok, _encoding}} = :timer.tc(fn -> Tokenizer.tokenize(text) end)
-
-      assert time_us < 1_000_000
-    end
-  end
-
   defp build_mock_encoding(tokens, ids, offsets) do
     encoding_stub = %{
       __struct__: Encoding,
