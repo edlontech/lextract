@@ -35,7 +35,8 @@ defmodule LeXtract.Tokenizer do
           tokens: [String.t()],
           ids: [non_neg_integer()],
           offsets: [{non_neg_integer(), non_neg_integer()}],
-          encoding: Encoding.t()
+          encoding: Encoding.t(),
+          text: String.t()
         }
 
   @type tokenizer_ref :: Tokenizer.t()
@@ -81,7 +82,8 @@ defmodule LeXtract.Tokenizer do
          tokens: Encoding.get_tokens(enc),
          ids: Encoding.get_ids(enc),
          offsets: Encoding.get_offsets(enc),
-         encoding: enc
+         encoding: enc,
+         text: text
        }}
     end
   end
