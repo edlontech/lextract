@@ -2,96 +2,7 @@ defmodule LeXtract do
   @external_resource "README.md"
   @moduledoc File.read!("README.md")
 
-  alias LeXtract.{Annotator, Document, Prompting}
-
-  @options_schema [
-    prompt: [
-      type: :string,
-      doc: "Extraction prompt/description"
-    ],
-    examples: [
-      type: {:list, :any},
-      doc: "List of example extractions (maps with :text and :extractions keys)"
-    ],
-    template_file: [
-      type: :string,
-      doc: "Path to template file (.json or .yaml)"
-    ],
-    model: [
-      type: :string,
-      required: true,
-      doc: "LLM model identifier (e.g., 'gpt-4o-mini')"
-    ],
-    provider: [
-      type: :atom,
-      required: true,
-      doc: "LLM provider (:openai, :gemini, :anthropic, etc.)"
-    ],
-    api_key: [
-      type: :string,
-      required: false,
-      doc: "API key for the LLM provider"
-    ],
-    format: [
-      type: {:in, [:json, :yaml]},
-      default: :yaml,
-      doc: "Output format for extractions"
-    ],
-    fence_output: [
-      type: :boolean,
-      default: false,
-      doc: "Expect fenced code blocks in LLM response"
-    ],
-    use_structured_output: [
-      type: :boolean,
-      default: false,
-      doc: "Use structured output mode (generate_object)"
-    ],
-    max_char_buffer: [
-      type: :pos_integer,
-      default: 1000,
-      doc: "Maximum chunk size in characters"
-    ],
-    chunk_overlap: [
-      type: :non_neg_integer,
-      default: 200,
-      doc: "Character overlap between chunks"
-    ],
-    batch_size: [
-      type: :pos_integer,
-      default: 5,
-      doc: "Number of chunks per LLM batch"
-    ],
-    extraction_passes: [
-      type: :pos_integer,
-      default: 1,
-      doc: "Number of extraction passes for multi-pass extraction"
-    ],
-    max_concurrency: [
-      type: :pos_integer,
-      default: 8,
-      doc: "Maximum concurrent LLM requests"
-    ],
-    temperature: [
-      type: :float,
-      default: 0.0,
-      doc: "LLM sampling temperature (0.0-1.0)"
-    ],
-    max_tokens: [
-      type: :pos_integer,
-      doc: "Maximum tokens in LLM response"
-    ],
-    timeout: [
-      type: :pos_integer,
-      default: 60_000,
-      doc: "Request timeout in milliseconds"
-    ],
-    attribute_suffix: [
-      type: :string,
-      default: "_attributes",
-      doc: "Suffix for attribute keys in structured output"
-    ]
-  ]
+  alias LeXtract.{Annotator, Config, Document, Prompting}
 
   @doc """
   Extracts structured information from text using LLMs.
@@ -110,7 +21,7 @@ defmodule LeXtract do
 
   ## Examples
 
-      iex> {:ok, stream} = LeXtract.extract(
+      iex> {:ok, _stream} = LeXtract.extract(
       ...>   "Sample text",
       ...>   prompt: "Extract entities",
       ...>   examples: [],
@@ -118,13 +29,10 @@ defmodule LeXtract do
       ...>   provider: :openai,
       ...>   api_key: "test-key"
       ...> )
-      iex> is_struct(stream, Stream)
-      true
-
   """
   @spec extract(
-          String.t() | [String.t()] | [Document.t()],
-          keyword()
+          source_document :: String.t() | [String.t()] | [Document.t()],
+          options :: Config.options()
         ) :: {:ok, Enumerable.t(LeXtract.AnnotatedDocument.t())} | {:error, Exception.t()}
   def extract(input, opts) when is_list(opts) do
     with {:ok, validated_opts} <- validate_options(opts),
@@ -156,8 +64,8 @@ defmodule LeXtract do
 
   """
   @spec extract!(
-          String.t() | [String.t()] | [Document.t()],
-          keyword()
+          source_document :: String.t() | [String.t()] | [Document.t()],
+          options :: Config.options()
         ) :: Enumerable.t(LeXtract.AnnotatedDocument.t())
   def extract!(input, opts) do
     case extract(input, opts) do
@@ -198,7 +106,7 @@ defmodule LeXtract do
       :ok
 
   """
-  @spec extract_from_file(Path.t(), keyword()) ::
+  @spec extract_from_file(file_path :: Path.t(), options :: Config.options()) ::
           {:ok, Enumerable.t(LeXtract.AnnotatedDocument.t())} | {:error, Exception.t()}
   def extract_from_file(file_path, opts) do
     case File.read(file_path) do
@@ -241,54 +149,23 @@ defmodule LeXtract do
       :yaml
 
   """
-  @spec validate_options(keyword()) :: {:ok, keyword()} | {:error, Exception.t()}
+  @spec validate_options(Config.options()) :: {:ok, Config.options()} | {:error, Exception.t()}
   def validate_options(opts) do
-    case NimbleOptions.validate(opts, @options_schema) do
-      {:ok, validated} ->
-        validate_template_options(validated)
-
-      {:error, %NimbleOptions.ValidationError{message: message}} ->
-        {:error,
-         LeXtract.Error.Invalid.Config.exception(errors: "Invalid extraction options: #{message}")}
-    end
-  end
-
-  defp validate_template_options(opts) do
-    has_inline = Keyword.has_key?(opts, :prompt) or Keyword.has_key?(opts, :examples)
-    has_file = Keyword.has_key?(opts, :template_file)
-
-    cond do
-      has_inline and has_file ->
-        {:error,
-         LeXtract.Error.Invalid.Config.exception(
-           errors:
-             "Cannot specify both inline template options (:prompt, :examples) and :template_file"
-         )}
-
-      not has_inline and not has_file ->
-        {:error,
-         LeXtract.Error.Invalid.Config.exception(
-           errors:
-             "Must specify either inline template options (:prompt with optional :examples) or :template_file"
-         )}
-
-      has_inline and not Keyword.has_key?(opts, :prompt) ->
-        {:error,
-         LeXtract.Error.Invalid.Config.exception(
-           errors: "When using inline template, :prompt is required"
-         )}
-
-      true ->
-        {:ok, opts}
+    case Config.validate(opts) do
+      {:ok, config} -> {:ok, Config.to_keyword(config)}
+      {:error, _} = error -> error
     end
   end
 
   defp build_template(opts) do
+    template_file = Keyword.get(opts, :template_file)
+    prompt = Keyword.get(opts, :prompt)
+
     cond do
-      Keyword.has_key?(opts, :template_file) ->
+      not is_nil(template_file) ->
         read_template_file(opts)
 
-      Keyword.has_key?(opts, :prompt) ->
+      not is_nil(prompt) ->
         build_inline_template(opts)
 
       true ->
@@ -361,7 +238,7 @@ defmodule LeXtract do
     base_config = [
       model: "#{provider}:#{model}",
       provider: provider,
-      api_key: Keyword.fetch(opts, :api_key),
+      api_key: Keyword.get(opts, :api_key),
       max_concurrency: Keyword.get(opts, :max_concurrency, 8)
     ]
 

@@ -1,5 +1,7 @@
 # LeXtract
 
+[![Hex](https://img.shields.io/hexpm/v/lextract?style=flat-square)](https://hex.pm/packages/lextract)
+
 LLM-powered text extraction library for Elixir. Based on Google's [LangExtract](https://github.com/google/langextract)
 
 LeXtract enables you to extract structured information from unstructured text using Large Language Models (LLMs). It provides a simple, streaming API with support for multiple LLM providers.
