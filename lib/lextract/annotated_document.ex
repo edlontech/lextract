@@ -36,6 +36,43 @@ defmodule LeXtract.AnnotatedDocument do
   defstruct [:extractions, :text, :document_id, :metadata]
 
   @doc """
+  Creates a new annotated document.
+
+  ## Parameters
+
+    * `opts` - Keyword list of options
+
+  ## Options
+
+    * `:text` - Original document text
+    * `:document_id` - Unique identifier (auto-generated if not provided)
+    * `:extractions` - List of extractions (default: [])
+    * `:metadata` - Optional metadata map
+
+  ## Examples
+
+      iex> doc = LeXtract.AnnotatedDocument.new(text: "Sample", document_id: "doc1")
+      iex> doc.text
+      "Sample"
+
+      iex> doc = LeXtract.AnnotatedDocument.new(text: "Test")
+      iex> String.length(doc.document_id)
+      36
+
+  """
+  @spec new(keyword()) :: t()
+  def new(opts \\ []) do
+    document_id = Keyword.get(opts, :document_id, UUIDv7.generate())
+
+    %__MODULE__{
+      document_id: document_id,
+      text: Keyword.get(opts, :text),
+      extractions: Keyword.get(opts, :extractions, []),
+      metadata: Keyword.get(opts, :metadata)
+    }
+  end
+
+  @doc """
   Returns extractions filtered by class.
 
   ## Examples

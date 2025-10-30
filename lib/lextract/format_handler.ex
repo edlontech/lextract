@@ -21,6 +21,49 @@ defmodule LeXtract.FormatHandler do
   @type format :: :json | :yaml
   @type parse_result :: {:ok, term()} | {:error, String.t()}
 
+  @type t :: %__MODULE__{
+          format: format(),
+          fence_output: boolean(),
+          attribute_suffix: String.t()
+        }
+
+  defstruct format: :yaml,
+            fence_output: false,
+            attribute_suffix: "_attributes"
+
+  @doc """
+  Creates a new format handler.
+
+  ## Parameters
+
+    * `format` - Format type (:json or :yaml)
+    * `opts` - Options
+
+  ## Options
+
+    * `:fence_output` - Whether output should be fenced (default: false)
+    * `:attribute_suffix` - Suffix for attribute fields (default: "_attributes")
+
+  ## Examples
+
+      iex> handler = LeXtract.FormatHandler.new(:json)
+      iex> handler.format
+      :json
+
+      iex> handler = LeXtract.FormatHandler.new(:yaml, fence_output: true)
+      iex> handler.fence_output
+      true
+
+  """
+  @spec new(format(), keyword()) :: t()
+  def new(format, opts \\ []) when format in [:json, :yaml] do
+    %__MODULE__{
+      format: format,
+      fence_output: Keyword.get(opts, :fence_output, false),
+      attribute_suffix: Keyword.get(opts, :attribute_suffix, "_attributes")
+    }
+  end
+
   @doc """
   Parses text in the specified format.
 

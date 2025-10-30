@@ -17,6 +17,11 @@ defmodule LeXtract.Document do
 
   """
 
+  @type example :: %{
+          text: String.t(),
+          extractions: [map()]
+        }
+
   @type t :: %__MODULE__{
           text: String.t(),
           additional_context: String.t() | nil,
