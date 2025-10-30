@@ -111,19 +111,44 @@ defmodule LeXtract.Schema.Analyzer do
 
   """
   @spec to_nimble_options(schema_info()) :: keyword()
-  def to_nimble_options(%{classes: _classes, attributes: _attributes, types: _types}) do
-    # NOTE: We generate a generic schema because NimbleOptions does not currently
-    # support validating the keys of maps inside a list in a way that allows for
-    # dynamic, multi-class structures like ours (e.g., one item could be a
-    # "Person" map, the next a "Medication" map with different keys).
-    # The type analysis is kept for potential future enhancements.
+  def to_nimble_options(%{classes: classes, attributes: attributes, types: _types}) do
+    # Generate a schema with explicit keys for OpenAI strict mode compatibility
+    # Each extraction object must have a defined structure with additionalProperties: false
+    extraction_keys = build_extraction_keys(classes, attributes)
+
     [
       extractions: [
         type: {:list, :map},
         default: [],
-        doc: "List of extracted entities"
+        doc: "List of extracted entities",
+        keys: extraction_keys
       ]
     ]
+  end
+
+  defp build_extraction_keys(classes, attributes) do
+    base_keys = [
+      class: [type: :string, doc: "Extraction class"]
+    ]
+
+    attribute_keys =
+      classes
+      |> Enum.flat_map(fn class ->
+        attrs = Map.get(attributes, class, [])
+
+        if Enum.empty?(attrs) do
+          []
+        else
+          attribute_key = class_to_attribute_key(class)
+
+          [
+            {String.to_atom(attribute_key),
+             [type: :map, doc: "Attributes for #{class} extraction"]}
+          ]
+        end
+      end)
+
+    base_keys ++ attribute_keys
   end
 
   defp extract_classes(examples) do

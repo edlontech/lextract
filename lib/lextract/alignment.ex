@@ -159,10 +159,6 @@ defmodule LeXtract.Alignment do
         {:error, reason} ->
           Logger.warning("Tokenization failed for extraction text: #{inspect(reason)}")
           nil
-
-        _ ->
-          Logger.warning("Unexpected tokenization result for extraction text")
-          nil
       end
     end
   end
@@ -384,37 +380,54 @@ defmodule LeXtract.Alignment do
 
       source_tokens
       |> Enum.chunk_every(needle_length, 1, :discard)
-      |> Enum.reduce_while({0, [], 0}, fn window, {idx, matches, count} ->
-        if count > occurrence_index do
-          {:halt, {idx, matches, count}}
-        else
-          window_str = Enum.join(window, " ")
-          similarity = String.jaro_distance(needle_str, window_str)
+      |> find_fuzzy_matches(needle_str, threshold, occurrence_index)
+      |> convert_match_to_interval(special_token_offset, needle_length, source_encoding, occurrence_index)
+    end
+  end
 
-          new_state =
-            if similarity >= threshold do
-              {idx + 1, [idx | matches], count + 1}
-            else
-              {idx + 1, matches, count}
-            end
+  defp find_fuzzy_matches(windows, needle_str, threshold, occurrence_index) do
+    windows
+    |> Enum.reduce_while({0, [], 0}, fn window, state ->
+      process_fuzzy_window(window, state, needle_str, threshold, occurrence_index)
+    end)
+  end
 
-          {:cont, new_state}
-        end
-      end)
-      |> case do
-        {_final_idx, matches, _count} ->
-          matches
-          |> Enum.reverse()
-          |> Enum.at(occurrence_index)
-          |> case do
-            nil ->
-              nil
+  defp process_fuzzy_window(_window, {idx, matches, count}, _needle_str, _threshold, occurrence_index)
+       when count > occurrence_index do
+    {:halt, {idx, matches, count}}
+  end
 
-            stripped_idx ->
-              actual_idx = stripped_idx + special_token_offset
-              token_span_to_char_interval(actual_idx, needle_length, source_encoding)
-          end
+  defp process_fuzzy_window(window, {idx, matches, count}, needle_str, threshold, _occurrence_index) do
+    window_str = Enum.join(window, " ")
+    similarity = String.jaro_distance(needle_str, window_str)
+
+    new_state =
+      if similarity >= threshold do
+        {idx + 1, [idx | matches], count + 1}
+      else
+        {idx + 1, matches, count}
       end
+
+    {:cont, new_state}
+  end
+
+  defp convert_match_to_interval(
+         {_final_idx, matches, _count},
+         special_token_offset,
+         needle_length,
+         source_encoding,
+         occurrence_index
+       ) do
+    matches
+    |> Enum.reverse()
+    |> Enum.at(occurrence_index)
+    |> case do
+      nil ->
+        nil
+
+      stripped_idx ->
+        actual_idx = stripped_idx + special_token_offset
+        token_span_to_char_interval(actual_idx, needle_length, source_encoding)
     end
   end
 
@@ -532,20 +545,24 @@ defmodule LeXtract.Alignment do
 
   defp reconstruct_text_from_tokens(tokens) do
     tokens
-    |> Enum.reduce([], fn token, acc ->
-      if String.starts_with?(token, "##") do
-        case acc do
-          [last | rest] ->
-            [last <> String.trim_leading(token, "##") | rest]
-
-          [] ->
-            [String.trim_leading(token, "##")]
-        end
-      else
-        [token | acc]
-      end
-    end)
+    |> Enum.reduce([], &merge_subword_token/2)
     |> Enum.reverse()
     |> Enum.join(" ")
+  end
+
+  defp merge_subword_token(token, acc) do
+    if String.starts_with?(token, "##") do
+      merge_continuation_token(token, acc)
+    else
+      [token | acc]
+    end
+  end
+
+  defp merge_continuation_token(token, [last | rest]) do
+    [last <> String.trim_leading(token, "##") | rest]
+  end
+
+  defp merge_continuation_token(token, []) do
+    [String.trim_leading(token, "##")]
   end
 end

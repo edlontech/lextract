@@ -40,10 +40,7 @@ defmodule LeXtract.Error.External.Annotation do
   end
 
   def message(%__MODULE__{reason: reason, request_details: details}) when is_map(details) do
-    details_str =
-      details
-      |> Enum.map(fn {k, v} -> "#{k}: #{inspect(v)}" end)
-      |> Enum.join(", ")
+    details_str = Enum.map_join(details, ", ", fn {k, v} -> "#{k}: #{inspect(v)}" end)
 
     "LLM annotation failed: #{reason} (#{details_str})"
   end

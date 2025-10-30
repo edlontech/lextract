@@ -26,12 +26,13 @@ defmodule LeXtract.MixProject do
       {:ex_doc, "~> 0.34", only: :dev, runtime: false, warn_if_outdated: true},
       {:mimic, "~> 2.0", only: :test},
       {:nimble_options, "~> 1.1"},
-      {:req_llm, "~> 1.0.0-rc.7"},
+      {:req_llm, "~> 1.0.0-rc.8"},
       {:splode, "~> 0.2.9"},
       {:text_chunker, "~> 0.5.2"},
       {:tokenizers, "~> 0.5.1"},
       {:uuid_v7, "~> 0.6.0"},
-      {:yaml_elixir, "~> 2.11"}
+      {:yaml_elixir, "~> 2.11"},
+      {:zoi, "~> 0.7.0"}
     ]
   end
 

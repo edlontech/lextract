@@ -517,7 +517,7 @@ defmodule LeXtract.AnnotatorTest do
 
       if length(doc.extractions) > 0 do
         extraction = hd(doc.extractions)
-        assert extraction.extraction_class == "person"
+        assert extraction.extraction_class == "Person"
         assert extraction.extraction_text == "John"
       end
     end

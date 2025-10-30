@@ -322,15 +322,16 @@ defmodule LeXtract.Annotator do
   end
 
   defp process_batch(annotator, chunks, _opts) do
-    prompts = generate_prompts_for_chunks(chunks, annotator.prompt_generator)
-
     responses =
       if annotator.use_structured_output do
+        prompts = generate_prompts_for_chunks_structured(chunks, annotator.prompt_generator)
+
         schema =
           generate_schema_from_examples(annotator.prompt_generator, annotator.format_handler)
 
         call_req_llm_object(annotator.req_llm_config, prompts, schema)
       else
+        prompts = generate_prompts_for_chunks(chunks, annotator.prompt_generator)
         call_req_llm_text(annotator.req_llm_config, prompts)
       end
 
@@ -366,6 +367,28 @@ defmodule LeXtract.Annotator do
     end)
   end
 
+  defp generate_prompts_for_chunks_structured(chunks, prompt_generator) do
+    Enum.map(chunks, fn chunk ->
+      additional_context =
+        if chunk.document do
+          chunk.document.additional_context
+        else
+          nil
+        end
+
+      description = prompt_generator.template.description
+
+      description_with_context =
+        if additional_context do
+          "#{description}\n\n#{additional_context}"
+        else
+          description
+        end
+
+      "#{description_with_context}\n\n#{chunk.text}"
+    end)
+  end
+
   defp process_response(%{use_structured_output: true}, object, chunk) do
     parse_structured_response(object, chunk)
   end
@@ -384,11 +407,12 @@ defmodule LeXtract.Annotator do
   defp call_req_llm_text(req_llm_config, prompts) do
     model = Keyword.fetch!(req_llm_config, :model)
     max_concurrency = Keyword.get(req_llm_config, :max_concurrency, 8)
+    llm_opts = Keyword.drop(req_llm_config, [:model, :max_concurrency, :api_key, :provider])
 
     prompts
     |> Task.async_stream(
       fn prompt ->
-        ReqLLM.generate_text(model, prompt, req_llm_config)
+        ReqLLM.generate_text(model, prompt, llm_opts)
       end,
       max_concurrency: max_concurrency,
       ordered: true,
@@ -410,12 +434,21 @@ defmodule LeXtract.Annotator do
 
   defp call_req_llm_object(req_llm_config, prompts, schema) do
     model = Keyword.fetch!(req_llm_config, :model)
+    provider = Keyword.get(req_llm_config, :provider)
     max_concurrency = Keyword.get(req_llm_config, :max_concurrency, 8)
+    llm_opts = Keyword.drop(req_llm_config, [:model, :max_concurrency, :api_key, :provider])
+
+    final_schema =
+      if provider == :openai do
+        build_openai_strict_json_schema(schema)
+      else
+        schema
+      end
 
     prompts
     |> Task.async_stream(
       fn prompt ->
-        ReqLLM.generate_object(model, prompt, schema, req_llm_config)
+        ReqLLM.generate_object(model, prompt, final_schema, llm_opts)
       end,
       max_concurrency: max_concurrency,
       ordered: true,
@@ -433,6 +466,65 @@ defmodule LeXtract.Annotator do
         Logger.error("ReqLLM task crashed: #{inspect(reason)}")
         {:error, {:task_exit, reason}}
     end)
+  end
+
+  defp build_openai_strict_json_schema(schema) when is_list(schema) do
+    extractions_spec = Keyword.get(schema, :extractions, [])
+    keys = Keyword.get(extractions_spec, :keys, [])
+
+    properties =
+      Enum.into(keys, %{}, fn {key, opts} ->
+        {to_string(key), build_property_schema(opts)}
+      end)
+
+    required_keys = Map.keys(properties)
+
+    items_schema = %{
+      "type" => "object",
+      "properties" => properties,
+      "required" => required_keys,
+      "additionalProperties" => false
+    }
+
+    %{
+      "type" => "object",
+      "properties" => %{
+        "extractions" => %{
+          "type" => "array",
+          "items" => items_schema,
+          "description" => Keyword.get(extractions_spec, :doc, "List of extracted entities")
+        }
+      },
+      "required" => ["extractions"],
+      "additionalProperties" => false
+    }
+  end
+
+  defp build_property_schema(opts) do
+    base =
+      case Keyword.get(opts, :type, :string) do
+        :string ->
+          %{"type" => "string"}
+
+        :integer ->
+          %{"type" => "integer"}
+
+        :map ->
+          %{
+            "type" => "object",
+            "properties" => %{},
+            "required" => [],
+            "additionalProperties" => false
+          }
+
+        _ ->
+          %{"type" => "string"}
+      end
+
+    case Keyword.get(opts, :doc) do
+      nil -> base
+      doc -> Map.put(base, "description", doc)
+    end
   end
 
   defp extract_response_text(%ReqLLM.Response{message: %{content: content}})
@@ -461,24 +553,7 @@ defmodule LeXtract.Annotator do
     case Tokenizer.tokenize(chunk.text) do
       {:ok, chunk_encoding} ->
         char_offset = chunk.char_interval.start_pos
-
-        Enum.map(extractions, fn extraction ->
-          aligned = Alignment.align_extraction(extraction, chunk_encoding)
-
-          case aligned.char_interval do
-            nil ->
-              aligned
-
-            interval ->
-              adjusted_interval =
-                CharInterval.new(
-                  interval.start_pos + char_offset,
-                  interval.end_pos + char_offset
-                )
-
-              %{aligned | char_interval: adjusted_interval}
-          end
-        end)
+        Enum.map(extractions, &align_and_adjust_extraction(&1, chunk_encoding, char_offset))
 
       {:error, reason} ->
         Logger.warning("Tokenization failed for chunk: #{inspect(reason)}")
@@ -486,17 +561,37 @@ defmodule LeXtract.Annotator do
     end
   end
 
+  defp align_and_adjust_extraction(extraction, chunk_encoding, char_offset) do
+    aligned = Alignment.align_extraction(extraction, chunk_encoding)
+
+    case aligned.char_interval do
+      nil ->
+        aligned
+
+      interval ->
+        adjusted_interval =
+          CharInterval.new(
+            interval.start_pos + char_offset,
+            interval.end_pos + char_offset
+          )
+
+        %{aligned | char_interval: adjusted_interval}
+    end
+  end
+
   defp merge_non_overlapping_extractions(all_extractions) do
     Enum.reduce(all_extractions, [], fn pass_extractions, acc ->
-      Enum.reduce(pass_extractions, acc, fn extraction, acc ->
-        if Enum.any?(acc, &extractions_overlap?(&1, extraction)) do
-          acc
-        else
-          [extraction | acc]
-        end
-      end)
+      Enum.reduce(pass_extractions, acc, &add_if_not_overlapping/2)
     end)
     |> Enum.reverse()
+  end
+
+  defp add_if_not_overlapping(extraction, acc) do
+    if Enum.any?(acc, &extractions_overlap?(&1, extraction)) do
+      acc
+    else
+      [extraction | acc]
+    end
   end
 
   defp extractions_overlap?(ext1, ext2) do
@@ -528,17 +623,22 @@ defmodule LeXtract.Annotator do
   defp convert_example_to_schema_format(extractions, format_handler) do
     Enum.map(extractions, fn extraction ->
       class = Map.get(extraction, :extraction_class) || Map.get(extraction, "extraction_class")
-      attributes_key = "#{class}#{format_handler.attribute_suffix}"
 
-      base_map = %{"class" => class}
+      attribute_key =
+        class
+        |> Macro.underscore()
+        |> Kernel.<>(format_handler.attribute_suffix)
 
       attributes =
         extraction
         |> Map.drop([:extraction_class, "extraction_class", :extraction_text, "extraction_text"])
+        |> Enum.map(fn {k, v} -> {to_string(k), v} end)
         |> Enum.into(%{})
 
+      base_map = %{"class" => class}
+
       if map_size(attributes) > 0 do
-        Map.put(base_map, attributes_key, attributes)
+        Map.put(base_map, attribute_key, attributes)
       else
         base_map
       end
@@ -584,12 +684,18 @@ defmodule LeXtract.Annotator do
       end)
       |> Enum.into(%{})
 
-    extraction_text = Map.get(attributes, "text") || Map.get(attributes, :text)
+    extraction_text =
+      Map.get(attributes, "name") ||
+        Map.get(attributes, :name) ||
+        Map.get(attributes, "text") ||
+        Map.get(attributes, :text) ||
+        Map.get(attributes, "extraction_text") ||
+        Map.get(attributes, :extraction_text)
 
     attributes_without_text =
       if map_size(attributes) > 0 do
         attributes
-        |> Map.drop(["text", :text])
+        |> Map.drop(["name", :name, "text", :text, "extraction_text", :extraction_text])
       else
         nil
       end

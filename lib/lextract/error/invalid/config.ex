@@ -28,10 +28,7 @@ defmodule LeXtract.Error.Invalid.Config do
   """
   @spec message(t()) :: String.t()
   def message(%__MODULE__{errors: errors}) when is_list(errors) do
-    formatted_errors =
-      errors
-      |> Enum.map(&"  - #{&1}")
-      |> Enum.join("\n")
+    formatted_errors = Enum.map_join(errors, "\n", &"  - #{&1}")
 
     "Configuration validation failed:\n#{formatted_errors}"
   end

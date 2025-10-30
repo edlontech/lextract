@@ -16,7 +16,7 @@ defmodule LeXtract.ResolverTest do
       {:ok, extractions} = Resolver.resolve(json, :json)
 
       assert length(extractions) == 2
-      assert Enum.at(extractions, 0).extraction_class == "person"
+      assert Enum.at(extractions, 0).extraction_class == "Person"
       assert Enum.at(extractions, 0).extraction_text == "John Doe"
       assert Enum.at(extractions, 0).extraction_index == 0
       assert Enum.at(extractions, 1).extraction_text == "Jane Smith"
@@ -34,7 +34,7 @@ defmodule LeXtract.ResolverTest do
 
       {:ok, [extraction]} = Resolver.resolve(json, :json)
 
-      assert extraction.extraction_class == "medication"
+      assert extraction.extraction_class == "Medication"
       assert extraction.extraction_text == "aspirin"
       assert extraction.extraction_index == 0
       assert extraction.attributes["dosage"] == "81mg"
@@ -64,7 +64,7 @@ defmodule LeXtract.ResolverTest do
 
       {:ok, extractions} = Resolver.resolve(json, :json)
       assert length(extractions) == 1
-      assert hd(extractions).extraction_class == "person"
+      assert hd(extractions).extraction_class == "Person"
     end
 
     test "returns error for malformed JSON" do
@@ -87,8 +87,8 @@ defmodule LeXtract.ResolverTest do
 
       assert length(extractions) == 2
 
-      person = Enum.find(extractions, &(&1.extraction_class == "person"))
-      org = Enum.find(extractions, &(&1.extraction_class == "organization"))
+      person = Enum.find(extractions, &(&1.extraction_class == "Person"))
+      org = Enum.find(extractions, &(&1.extraction_class == "Organization"))
 
       assert person.extraction_text == "John"
       assert person.extraction_index == 0
@@ -122,7 +122,7 @@ defmodule LeXtract.ResolverTest do
 
       {:ok, [extraction]} = Resolver.resolve(json, :json)
 
-      assert extraction.extraction_class == "person"
+      assert extraction.extraction_class == "Person"
       assert extraction.extraction_text == "John"
       assert is_nil(extraction.attributes)
     end
@@ -184,7 +184,7 @@ defmodule LeXtract.ResolverTest do
 
       {:ok, [extraction]} = Resolver.resolve(yaml, :yaml)
 
-      assert extraction.extraction_class == "medication"
+      assert extraction.extraction_class == "Medication"
       assert extraction.attributes["dosage"] == "81mg"
       assert extraction.attributes["frequency"] == "daily"
     end
@@ -198,7 +198,7 @@ defmodule LeXtract.ResolverTest do
 
       {:ok, extractions} = Resolver.resolve(yaml, :yaml)
       assert length(extractions) == 1
-      assert hd(extractions).extraction_class == "entity"
+      assert hd(extractions).extraction_class == "Entity"
     end
 
     test "returns error for invalid YAML" do
@@ -227,7 +227,7 @@ defmodule LeXtract.ResolverTest do
 
       {:ok, [extraction]} = Resolver.resolve_parsed(data)
 
-      assert extraction.extraction_class == "entity"
+      assert extraction.extraction_class == "Entity"
       assert extraction.extraction_text == "test"
     end
 
@@ -236,7 +236,7 @@ defmodule LeXtract.ResolverTest do
 
       {:ok, [extraction]} = Resolver.resolve_parsed(data)
 
-      assert extraction.extraction_class == "entity"
+      assert extraction.extraction_class == "Entity"
       assert extraction.extraction_text == "test"
     end
 
@@ -434,7 +434,7 @@ defmodule LeXtract.ResolverTest do
       assert length(extractions) == 3
 
       classes = Enum.map(extractions, & &1.extraction_class) |> Enum.sort()
-      assert classes == ["location", "organization", "person"]
+      assert classes == ["Location", "Organization", "Person"]
     end
 
     test "handles different indices for different classes" do
@@ -449,8 +449,8 @@ defmodule LeXtract.ResolverTest do
 
       {:ok, extractions} = Resolver.resolve(json, :json)
 
-      person = Enum.find(extractions, &(&1.extraction_class == "person"))
-      org = Enum.find(extractions, &(&1.extraction_class == "organization"))
+      person = Enum.find(extractions, &(&1.extraction_class == "Person"))
+      org = Enum.find(extractions, &(&1.extraction_class == "Organization"))
 
       assert person.extraction_index == 10
       assert org.extraction_index == 20
@@ -468,8 +468,8 @@ defmodule LeXtract.ResolverTest do
 
       {:ok, extractions} = Resolver.resolve(json, :json)
 
-      person = Enum.find(extractions, &(&1.extraction_class == "person"))
-      org = Enum.find(extractions, &(&1.extraction_class == "organization"))
+      person = Enum.find(extractions, &(&1.extraction_class == "Person"))
+      org = Enum.find(extractions, &(&1.extraction_class == "Organization"))
 
       assert person.attributes["age"] == "30"
       assert org.attributes["type"] == "corporation"
@@ -629,7 +629,7 @@ defmodule LeXtract.ResolverTest do
       assert length(extractions) == 2
 
       aspirin = Enum.at(extractions, 0)
-      assert aspirin.extraction_class == "medication"
+      assert aspirin.extraction_class == "Medication"
       assert aspirin.extraction_text == "aspirin"
       assert aspirin.extraction_index == 0
       assert aspirin.attributes["dosage"] == "81mg"
@@ -660,8 +660,8 @@ defmodule LeXtract.ResolverTest do
 
       assert length(extractions) == 2
 
-      person = Enum.find(extractions, &(&1.extraction_class == "person"))
-      org = Enum.find(extractions, &(&1.extraction_class == "organization"))
+      person = Enum.find(extractions, &(&1.extraction_class == "Person"))
+      org = Enum.find(extractions, &(&1.extraction_class == "Organization"))
 
       assert person.extraction_text == "John Doe"
       assert person.attributes["age"] == "30"

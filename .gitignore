@@ -1,9 +1,10 @@
 # Created by https://www.toptal.com/developers/gitignore/api/elixir,erlang,vim,visualstudiocode,macos
 # Edit at https://www.toptal.com/developers/gitignore?templates=elixir,erlang,vim,visualstudiocode,macos
 #
-
+.claude_consciousness.m8
 .mcp.json
 .DS_Store
+.envrc
 
 # direnv
 priv/plts/dialyzer.plt

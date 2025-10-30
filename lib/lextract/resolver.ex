@@ -45,7 +45,7 @@ defmodule LeXtract.Resolver do
       iex> json = ~s([{"person": "John Doe", "person_index": 0}])
       iex> {:ok, [extraction]} = LeXtract.Resolver.resolve(json, :json)
       iex> extraction.extraction_class
-      "person"
+      "Person"
       iex> extraction.extraction_text
       "John Doe"
       iex> extraction.extraction_index
@@ -73,7 +73,7 @@ defmodule LeXtract.Resolver do
       iex> yaml = "- medication: aspirin\\n  medication_index: 0"
       iex> {:ok, extractions} = LeXtract.Resolver.resolve(yaml, :yaml)
       iex> hd(extractions).extraction_class
-      "medication"
+      "Medication"
 
   """
   @spec resolve(String.t(), FormatHandler.format()) :: resolve_result()
@@ -100,7 +100,7 @@ defmodule LeXtract.Resolver do
       iex> data = %{"extractions" => [%{"entity" => "test"}]}
       iex> {:ok, [extraction]} = LeXtract.Resolver.resolve_parsed(data)
       iex> extraction.extraction_class
-      "entity"
+      "Entity"
 
   """
   @spec resolve_parsed(term()) :: resolve_result()
@@ -140,10 +140,22 @@ defmodule LeXtract.Resolver do
   end
 
   defp extract_from_item(item, default_index) when is_map(item) do
-    item
-    |> Enum.flat_map(fn {key, value} ->
-      process_item_field(item, normalize_key(key), value, default_index)
-    end)
+    extraction_keys =
+      item
+      |> Map.keys()
+      |> Enum.map(&normalize_key/1)
+      |> Enum.reject(&metadata_field?/1)
+
+    case extraction_keys do
+      [] ->
+        []
+
+      keys ->
+        Enum.flat_map(keys, fn key ->
+          value = Map.get(item, key) || Map.get(item, String.to_atom(key))
+          process_item_field(item, key, value, default_index)
+        end)
+    end
   end
 
   defp extract_from_item(_, _), do: []
@@ -173,10 +185,11 @@ defmodule LeXtract.Resolver do
   defp build_extraction_from_string(item, extraction_class, value, default_index) do
     attributes = get_attributes(item, extraction_class)
     index = get_index(item, extraction_class) || default_index
+    normalized_class = normalize_extraction_class(extraction_class)
 
     [
       %Extraction{
-        extraction_class: extraction_class,
+        extraction_class: normalized_class,
         extraction_text: value,
         attributes: attributes,
         extraction_index: index
@@ -186,10 +199,11 @@ defmodule LeXtract.Resolver do
 
   defp build_extractions_from_list(item, extraction_class, value) do
     attributes = get_attributes(item, extraction_class)
+    normalized_class = normalize_extraction_class(extraction_class)
 
     Enum.map(Enum.with_index(value), fn {text, idx} ->
       %Extraction{
-        extraction_class: extraction_class,
+        extraction_class: normalized_class,
         extraction_text: text,
         attributes: attributes,
         extraction_index: idx
@@ -239,5 +253,11 @@ defmodule LeXtract.Resolver do
     Map.new(map, fn {k, v} ->
       {normalize_key(k), v}
     end)
+  end
+
+  defp normalize_extraction_class(class) when is_binary(class) do
+    class
+    |> String.split("_")
+    |> Enum.map_join("", &String.capitalize/1)
   end
 end

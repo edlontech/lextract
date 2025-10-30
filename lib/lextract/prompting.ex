@@ -221,13 +221,6 @@ defmodule LeXtract.Prompting do
 
           {:error, %LeXtract.Error.Processing.Parsing{} = error} ->
             {:error, error}
-
-          {:error, reason} ->
-            {:error,
-             LeXtract.Error.External.TemplateRead.exception(
-               file_path: path,
-               reason: "Failed to parse template file: #{inspect(reason)}"
-             )}
         end
 
       {:error, reason} ->
@@ -280,6 +273,68 @@ defmodule LeXtract.Prompting do
   end
 
   defp format_yaml_item(item) when is_map(item) do
+    extraction_class =
+      get_extraction_class(item)
+      |> normalize_class_name()
+
+    extraction_text = get_extraction_text(item)
+    attributes = get_extraction_attributes(item)
+
+    if extraction_text do
+      format_langextract_style(extraction_class, extraction_text, attributes)
+    else
+      format_standard_style(item)
+    end
+  end
+
+  defp get_extraction_class(item) do
+    Map.get(item, :extraction_class) || Map.get(item, "extraction_class")
+  end
+
+  defp get_extraction_text(item) do
+    Map.get(item, :extraction_text) ||
+      Map.get(item, "extraction_text") ||
+      Map.get(item, :name) ||
+      Map.get(item, "name")
+  end
+
+  defp get_extraction_attributes(item) do
+    item
+    |> Map.drop([
+      :extraction_class,
+      "extraction_class",
+      :extraction_text,
+      "extraction_text",
+      :name,
+      "name"
+    ])
+    |> Enum.into(%{})
+  end
+
+  defp normalize_class_name(class) when is_binary(class) do
+    class
+    |> Macro.underscore()
+    |> String.downcase()
+  end
+
+  defp normalize_class_name(_), do: "entity"
+
+  defp format_langextract_style(class, text, attributes) when map_size(attributes) > 0 do
+    attribute_key = "#{class}_attributes"
+
+    attribute_lines =
+      Enum.map_join(attributes, "\n", fn {key, value} ->
+        "    #{normalize_key(key)}: #{format_yaml_value(value)}"
+      end)
+
+    "- #{class}: #{format_yaml_value(text)}\n  #{attribute_key}:\n#{attribute_lines}"
+  end
+
+  defp format_langextract_style(class, text, _attributes) do
+    "- #{class}: #{format_yaml_value(text)}"
+  end
+
+  defp format_standard_style(item) do
     lines =
       Enum.map_join(item, "\n", fn {key, value} ->
         format_yaml_field(key, value, "  ")
@@ -291,15 +346,19 @@ defmodule LeXtract.Prompting do
   defp format_yaml_field(key, value, indent) when is_map(value) do
     nested =
       Enum.map_join(value, "\n", fn {k, v} ->
-        "#{indent}  #{k}: #{format_yaml_value(v)}"
+        "#{indent}  #{normalize_key(k)}: #{format_yaml_value(v)}"
       end)
 
-    "#{indent}#{key}:\n#{nested}"
+    "#{indent}#{normalize_key(key)}:\n#{nested}"
   end
 
   defp format_yaml_field(key, value, indent) do
-    "#{indent}#{key}: #{format_yaml_value(value)}"
+    "#{indent}#{normalize_key(key)}: #{format_yaml_value(value)}"
   end
+
+  defp normalize_key(key) when is_atom(key), do: Atom.to_string(key)
+  defp normalize_key(key) when is_binary(key), do: key
+  defp normalize_key(key), do: to_string(key)
 
   defp format_yaml_value(value) when is_binary(value), do: value
   defp format_yaml_value(value) when is_number(value), do: to_string(value)
