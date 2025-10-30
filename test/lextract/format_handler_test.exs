@@ -49,20 +49,17 @@ defmodule LeXtract.FormatHandlerTest do
 
     test "returns error for invalid JSON" do
       json = "{invalid json}"
-      assert {:error, error_msg} = FormatHandler.parse(json, :json)
-      assert error_msg =~ "JSON parsing failed"
+      assert {:error, %LeXtract.Error.Processing.Parsing{}} = FormatHandler.parse(json, :json)
     end
 
     test "returns error for incomplete JSON object" do
       json = ~s({"key": "value")
-      assert {:error, error_msg} = FormatHandler.parse(json, :json)
-      assert error_msg =~ "JSON parsing failed"
+      assert {:error, %LeXtract.Error.Processing.Parsing{}} = FormatHandler.parse(json, :json)
     end
 
     test "returns error for malformed JSON array" do
       json = ~s([1, 2,)
-      assert {:error, error_msg} = FormatHandler.parse(json, :json)
-      assert error_msg =~ "JSON parsing failed"
+      assert {:error, %LeXtract.Error.Processing.Parsing{}} = FormatHandler.parse(json, :json)
     end
   end
 
@@ -111,8 +108,7 @@ defmodule LeXtract.FormatHandlerTest do
 
     test "returns error for invalid YAML" do
       yaml = ":\n  invalid: yaml: structure"
-      assert {:error, error_msg} = FormatHandler.parse(yaml, :yaml)
-      assert error_msg =~ "YAML parsing failed"
+      assert {:error, %LeXtract.Error.Processing.Parsing{}} = FormatHandler.parse(yaml, :yaml)
     end
   end
 

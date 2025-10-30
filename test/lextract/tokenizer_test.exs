@@ -103,7 +103,7 @@ defmodule LeXtract.TokenizerTest do
         {:error, :encoding_failed}
       end)
 
-      {:error, :encoding_failed} = Tokenizer.tokenize("test")
+      {:error, %LeXtract.Error.Processing.Tokenization{}} = Tokenizer.tokenize("test")
     end
   end
 

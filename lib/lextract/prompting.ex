@@ -198,7 +198,7 @@ defmodule LeXtract.Prompting do
 
   ## Returns
 
-  `{:ok, template}` or `{:error, reason}`
+  `{:ok, template}` or `{:error, exception}`
 
   ## Examples
 
@@ -211,20 +211,31 @@ defmodule LeXtract.Prompting do
 
   """
   @spec read_template(Path.t(), :json | :yaml) ::
-          {:ok, template()} | {:error, String.t()}
+          {:ok, template()} | {:error, Exception.t()}
   def read_template(path, format) when format in [:json, :yaml] do
     case File.read(path) do
       {:ok, content} ->
         case FormatHandler.parse(content, format) do
           {:ok, data} ->
-            parse_template_data(data)
+            parse_template_data(data, path)
+
+          {:error, %LeXtract.Error.Processing.Parsing{} = error} ->
+            {:error, error}
 
           {:error, reason} ->
-            {:error, "Failed to parse template file: #{reason}"}
+            {:error,
+             LeXtract.Error.External.TemplateRead.exception(
+               file_path: path,
+               reason: "Failed to parse template file: #{inspect(reason)}"
+             )}
         end
 
       {:error, reason} ->
-        {:error, "Failed to read template file: #{:file.format_error(reason)}"}
+        {:error,
+         LeXtract.Error.External.TemplateRead.exception(
+           file_path: path,
+           reason: reason
+         )}
     end
   end
 
@@ -232,13 +243,15 @@ defmodule LeXtract.Prompting do
     description = Map.get(template, :description) || Map.get(template, "description")
 
     unless is_binary(description) and String.trim(description) != "" do
-      raise ArgumentError, "Template must have a non-empty description"
+      raise LeXtract.Error.Invalid.Template.exception(
+              reason: "Template must have a non-empty description"
+            )
     end
 
     examples = Map.get(template, :examples) || Map.get(template, "examples") || []
 
     unless is_list(examples) do
-      raise ArgumentError, "Template examples must be a list"
+      raise LeXtract.Error.Invalid.Template.exception(reason: "Template examples must be a list")
     end
 
     :ok
@@ -295,7 +308,7 @@ defmodule LeXtract.Prompting do
   defp format_yaml_value(nil), do: "null"
   defp format_yaml_value(value), do: inspect(value)
 
-  defp parse_template_data(data) when is_map(data) do
+  defp parse_template_data(data, template_path) when is_map(data) do
     description = Map.get(data, "description") || Map.get(data, :description)
     examples_raw = Map.get(data, "examples") || Map.get(data, :examples) || []
 
@@ -308,12 +321,20 @@ defmodule LeXtract.Prompting do
          examples: examples
        }}
     else
-      {:error, "Template must have a description field"}
+      {:error,
+       LeXtract.Error.Invalid.Template.exception(
+         reason: "Template must have a description field",
+         template_path: template_path
+       )}
     end
   end
 
-  defp parse_template_data(_) do
-    {:error, "Template data must be a map"}
+  defp parse_template_data(_, template_path) do
+    {:error,
+     LeXtract.Error.Invalid.Template.exception(
+       reason: "Template data must be a map",
+       template_path: template_path
+     )}
   end
 
   defp normalize_examples(examples) when is_list(examples) do

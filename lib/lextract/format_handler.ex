@@ -19,7 +19,7 @@ defmodule LeXtract.FormatHandler do
   """
 
   @type format :: :json | :yaml
-  @type parse_result :: {:ok, term()} | {:error, String.t()}
+  @type parse_result :: {:ok, term()} | {:error, Exception.t()}
 
   @type t :: %__MODULE__{
           format: format(),
@@ -170,15 +170,35 @@ defmodule LeXtract.FormatHandler do
 
   defp parse_content(text, :json) do
     case Jason.decode(text) do
-      {:ok, data} -> {:ok, data}
-      {:error, error} -> {:error, "JSON parsing failed: #{inspect(error)}"}
+      {:ok, data} ->
+        {:ok, data}
+
+      {:error, error} ->
+        content_sample = String.slice(text, 0, 100)
+
+        {:error,
+         LeXtract.Error.Processing.Parsing.exception(
+           format: :json,
+           reason: inspect(error),
+           content_sample: content_sample
+         )}
     end
   end
 
   defp parse_content(text, :yaml) do
     case YamlElixir.read_from_string(text) do
-      {:ok, data} -> {:ok, data}
-      {:error, error} -> {:error, "YAML parsing failed: #{inspect(error)}"}
+      {:ok, data} ->
+        {:ok, data}
+
+      {:error, error} ->
+        content_sample = String.slice(text, 0, 100)
+
+        {:error,
+         LeXtract.Error.Processing.Parsing.exception(
+           format: :yaml,
+           reason: inspect(error),
+           content_sample: content_sample
+         )}
     end
   end
 

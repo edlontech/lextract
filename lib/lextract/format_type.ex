@@ -35,15 +35,23 @@ defmodule LeXtract.FormatType do
       iex> LeXtract.FormatType.from_string("yml")
       {:ok, :yaml}
 
-      iex> LeXtract.FormatType.from_string("invalid")
-      {:error, "Unknown format type: invalid"}
+      iex> {:error, error} = LeXtract.FormatType.from_string("invalid")
+      iex> is_exception(error)
+      true
 
   """
-  @spec from_string(String.t()) :: {:ok, t()} | {:error, String.t()}
+  @spec from_string(String.t()) :: {:ok, t()} | {:error, Exception.t()}
   def from_string("json"), do: {:ok, :json}
   def from_string("yaml"), do: {:ok, :yaml}
   def from_string("yml"), do: {:ok, :yaml}
-  def from_string(other), do: {:error, "Unknown format type: #{other}"}
+
+  def from_string(other) do
+    {:error,
+     LeXtract.Error.Invalid.Format.exception(
+       format_string: other,
+       reason: "Only 'json', 'yaml', and 'yml' are supported"
+     )}
+  end
 
   @doc """
   Converts a format type atom to its string representation.

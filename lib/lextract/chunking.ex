@@ -89,8 +89,13 @@ defmodule LeXtract.Chunking do
           chunk_overlap: chunk_overlap
         )
 
+      {:error, %LeXtract.Error.External.TokenizerLoad{} = error} ->
+        raise error
+
       {:error, reason} ->
-        raise "Failed to load tokenizer: #{inspect(reason)}"
+        raise LeXtract.Error.Processing.Chunking.exception(
+                reason: "Failed to load tokenizer: #{inspect(reason)}"
+              )
     end
   end
 

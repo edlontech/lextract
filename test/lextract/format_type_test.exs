@@ -18,23 +18,33 @@ defmodule LeXtract.FormatTypeTest do
     end
 
     test "returns error for unknown format" do
-      assert {:error, "Unknown format type: xml"} = FormatType.from_string("xml")
+      assert {:error, error} = FormatType.from_string("xml")
+      assert %LeXtract.Error.Invalid.Format{} = error
+      assert error.format_string == "xml"
     end
 
     test "returns error for empty string" do
-      assert {:error, "Unknown format type: "} = FormatType.from_string("")
+      assert {:error, error} = FormatType.from_string("")
+      assert %LeXtract.Error.Invalid.Format{} = error
+      assert error.format_string == ""
     end
 
     test "returns error for uppercase format" do
-      assert {:error, "Unknown format type: JSON"} = FormatType.from_string("JSON")
+      assert {:error, error} = FormatType.from_string("JSON")
+      assert %LeXtract.Error.Invalid.Format{} = error
+      assert error.format_string == "JSON"
     end
 
     test "returns error for mixed case format" do
-      assert {:error, "Unknown format type: Json"} = FormatType.from_string("Json")
+      assert {:error, error} = FormatType.from_string("Json")
+      assert %LeXtract.Error.Invalid.Format{} = error
+      assert error.format_string == "Json"
     end
 
     test "returns error for format with whitespace" do
-      assert {:error, "Unknown format type:  json "} = FormatType.from_string(" json ")
+      assert {:error, error} = FormatType.from_string(" json ")
+      assert %LeXtract.Error.Invalid.Format{} = error
+      assert error.format_string == " json "
     end
   end
 

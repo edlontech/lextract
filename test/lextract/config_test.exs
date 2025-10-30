@@ -125,27 +125,27 @@ defmodule LeXtract.ConfigTest do
     end
 
     test "returns error for non-positive max_char_buffer" do
-      assert {:error, %NimbleOptions.ValidationError{key: :max_char_buffer}} =
+      assert {:error, %LeXtract.Error.Invalid.Config{}} =
                Config.validate(max_char_buffer: 0)
     end
 
     test "returns error for negative max_char_buffer" do
-      assert {:error, %NimbleOptions.ValidationError{key: :max_char_buffer}} =
+      assert {:error, %LeXtract.Error.Invalid.Config{}} =
                Config.validate(max_char_buffer: -1)
     end
 
     test "returns error for temperature below 0.0" do
-      assert {:error, %NimbleOptions.ValidationError{key: :temperature}} =
+      assert {:error, %LeXtract.Error.Invalid.Config{}} =
                Config.validate(temperature: -0.1)
     end
 
     test "returns error for temperature above 1.0" do
-      assert {:error, %NimbleOptions.ValidationError{key: :temperature}} =
+      assert {:error, %LeXtract.Error.Invalid.Config{}} =
                Config.validate(temperature: 1.1)
     end
 
     test "returns error for invalid format_type" do
-      assert {:error, %NimbleOptions.ValidationError{key: :format_type}} =
+      assert {:error, %LeXtract.Error.Invalid.Config{}} =
                Config.validate(format_type: :xml)
     end
 
@@ -192,7 +192,7 @@ defmodule LeXtract.ConfigTest do
     test "re-validates struct fields" do
       config = %Config{Config.default() | max_char_buffer: -1}
 
-      assert {:error, %NimbleOptions.ValidationError{key: :max_char_buffer}} =
+      assert {:error, %LeXtract.Error.Invalid.Config{}} =
                Config.validate(config)
     end
   end
@@ -206,19 +206,19 @@ defmodule LeXtract.ConfigTest do
     end
 
     test "raises for invalid max_char_buffer" do
-      assert_raise NimbleOptions.ValidationError, ~r/expected positive integer/, fn ->
+      assert_raise LeXtract.Error.Invalid.Config, ~r/expected positive integer/, fn ->
         Config.validate!(max_char_buffer: -1)
       end
     end
 
     test "raises for invalid temperature" do
-      assert_raise NimbleOptions.ValidationError, ~r/must be a float between 0.0 and 1.0/, fn ->
+      assert_raise LeXtract.Error.Invalid.Config, ~r/must be a float between 0.0 and 1.0/, fn ->
         Config.validate!(temperature: 1.5)
       end
     end
 
     test "raises for invalid format_type" do
-      assert_raise NimbleOptions.ValidationError, ~r/expected one of \[:json, :yaml\]/, fn ->
+      assert_raise LeXtract.Error.Invalid.Config, ~r/expected one of \[:json, :yaml\]/, fn ->
         Config.validate!(format_type: :csv)
       end
     end

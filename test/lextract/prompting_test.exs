@@ -41,15 +41,15 @@ defmodule LeXtract.PromptingTest do
     test "validates template has description" do
       handler = FormatHandler.new(:json)
 
-      assert_raise ArgumentError, ~r/non-empty description/, fn ->
+      assert_raise LeXtract.Error.Invalid.Template, ~r/non-empty description/, fn ->
         Prompting.new(%{examples: []}, handler)
       end
 
-      assert_raise ArgumentError, ~r/non-empty description/, fn ->
+      assert_raise LeXtract.Error.Invalid.Template, ~r/non-empty description/, fn ->
         Prompting.new(%{description: "", examples: []}, handler)
       end
 
-      assert_raise ArgumentError, ~r/non-empty description/, fn ->
+      assert_raise LeXtract.Error.Invalid.Template, ~r/non-empty description/, fn ->
         Prompting.new(%{description: "   ", examples: []}, handler)
       end
     end
@@ -57,7 +57,7 @@ defmodule LeXtract.PromptingTest do
     test "validates examples is a list" do
       handler = FormatHandler.new(:json)
 
-      assert_raise ArgumentError, ~r/examples must be a list/, fn ->
+      assert_raise LeXtract.Error.Invalid.Template, ~r/examples must be a list/, fn ->
         Prompting.new(%{description: "Test", examples: "not a list"}, handler)
       end
     end
@@ -298,22 +298,20 @@ defmodule LeXtract.PromptingTest do
     end
 
     test "returns error for non-existent file" do
-      assert {:error, reason} = Prompting.read_template("/nonexistent/file.json", :json)
-      assert String.contains?(reason, "Failed to read")
+      assert {:error, %LeXtract.Error.External.TemplateRead{}} =
+               Prompting.read_template("/nonexistent/file.json", :json)
     end
 
     test "returns error for malformed JSON", %{json_path: path} do
       File.write!(path, "{invalid json")
 
-      assert {:error, reason} = Prompting.read_template(path, :json)
-      assert String.contains?(reason, "Failed to parse")
+      assert {:error, %LeXtract.Error.Processing.Parsing{}} = Prompting.read_template(path, :json)
     end
 
     test "returns error for template without description", %{json_path: path} do
       File.write!(path, ~s({"examples": []}))
 
-      assert {:error, reason} = Prompting.read_template(path, :json)
-      assert String.contains?(reason, "description")
+      assert {:error, %LeXtract.Error.Invalid.Template{}} = Prompting.read_template(path, :json)
     end
   end
 end

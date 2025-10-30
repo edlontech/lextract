@@ -55,7 +55,7 @@ defmodule LeXtract.Resolver do
 
   alias LeXtract.{Extraction, FormatHandler}
 
-  @type resolve_result :: {:ok, [Extraction.t()]} | {:error, String.t()}
+  @type resolve_result :: {:ok, [Extraction.t()]} | {:error, Exception.t()}
 
   @doc """
   Resolves LLM text output into a list of Extraction structs.
@@ -124,7 +124,10 @@ defmodule LeXtract.Resolver do
   end
 
   defp extract_extractions_data(_) do
-    {:error, "Could not find extractions array in parsed data"}
+    {:error,
+     LeXtract.Error.Processing.Resolution.exception(
+       reason: "Could not find extractions array in parsed data"
+     )}
   end
 
   defp convert_to_extractions(extraction_data) do

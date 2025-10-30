@@ -70,8 +70,7 @@ defmodule LeXtract.ResolverTest do
     test "returns error for malformed JSON" do
       json = "{invalid json}"
 
-      {:error, reason} = Resolver.resolve(json, :json)
-      assert reason =~ "JSON parsing failed"
+      {:error, %LeXtract.Error.Processing.Parsing{}} = Resolver.resolve(json, :json)
     end
 
     test "handles multiple extraction classes per item" do
@@ -205,8 +204,7 @@ defmodule LeXtract.ResolverTest do
     test "returns error for invalid YAML" do
       yaml = ":\n  invalid: yaml: structure"
 
-      {:error, reason} = Resolver.resolve(yaml, :yaml)
-      assert reason =~ "YAML parsing failed"
+      {:error, %LeXtract.Error.Processing.Parsing{}} = Resolver.resolve(yaml, :yaml)
     end
   end
 
@@ -245,8 +243,7 @@ defmodule LeXtract.ResolverTest do
     test "returns error for invalid structure" do
       data = %{"invalid" => "structure"}
 
-      {:error, reason} = Resolver.resolve_parsed(data)
-      assert reason == "Could not find extractions array in parsed data"
+      {:error, %LeXtract.Error.Processing.Resolution{}} = Resolver.resolve_parsed(data)
     end
 
     test "handles parsed data with attributes" do

@@ -155,18 +155,21 @@ defmodule LeXtract.Config do
 
       iex> {:error, error} = LeXtract.Config.validate(max_char_buffer: -1)
       iex> Exception.message(error)
-      "invalid value for :max_char_buffer option: expected positive integer, got: -1"
+      "Configuration validation failed: invalid value for :max_char_buffer option: expected positive integer, got: -1"
 
       iex> {:error, error} = LeXtract.Config.validate(temperature: 1.5)
-      iex> Exception.message(error)
-      "invalid value for :temperature option: must be a float between 0.0 and 1.0, got: 1.5"
+      iex> String.contains?(Exception.message(error), "must be a float between 0.0 and 1.0")
+      true
 
   """
-  @spec validate(keyword() | t()) :: {:ok, t()} | {:error, NimbleOptions.ValidationError.t()}
+  @spec validate(keyword() | t()) :: {:ok, t()} | {:error, Exception.t()}
   def validate(opts) when is_list(opts) do
     case NimbleOptions.validate(opts, @options_schema) do
-      {:ok, validated_opts} -> {:ok, struct!(__MODULE__, validated_opts)}
-      {:error, _} = error -> error
+      {:ok, validated_opts} ->
+        {:ok, struct!(__MODULE__, validated_opts)}
+
+      {:error, %NimbleOptions.ValidationError{} = error} ->
+        {:error, LeXtract.Error.Invalid.Config.exception(errors: Exception.message(error))}
     end
   end
 
@@ -178,7 +181,7 @@ defmodule LeXtract.Config do
   @doc """
   Validates configuration and raises on error.
 
-  Returns the validated config struct or raises `NimbleOptions.ValidationError`.
+  Returns the validated config struct or raises `LeXtract.Error.Invalid.Config`.
 
   ## Examples
 
@@ -186,7 +189,7 @@ defmodule LeXtract.Config do
       %LeXtract.Config{max_char_buffer: 1000}
 
       iex> LeXtract.Config.validate!(max_char_buffer: -1)
-      ** (NimbleOptions.ValidationError) invalid value for :max_char_buffer option: expected positive integer, got: -1
+      ** (LeXtract.Error.Invalid.Config) Configuration validation failed: invalid value for :max_char_buffer option: expected positive integer, got: -1
 
   """
   @spec validate!(keyword() | t()) :: t()

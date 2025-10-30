@@ -73,7 +73,7 @@ defmodule LeXtract.Tokenizer do
       true
 
   """
-  @spec tokenize(String.t(), keyword()) :: {:ok, encoding()} | {:error, term()}
+  @spec tokenize(String.t(), keyword()) :: {:ok, encoding()} | {:error, Exception.t()}
   def tokenize(text, opts \\ []) when is_binary(text) do
     with {:ok, tokenizer} <- get_or_load_tokenizer(opts),
          {:ok, enc} <- Tokenizer.encode(tokenizer, text) do
@@ -85,6 +85,18 @@ defmodule LeXtract.Tokenizer do
          encoding: enc,
          text: text
        }}
+    else
+      {:error, %LeXtract.Error.External.TokenizerLoad{}} = error ->
+        error
+
+      {:error, reason} ->
+        text_sample = String.slice(text, 0, 100)
+
+        {:error,
+         LeXtract.Error.Processing.Tokenization.exception(
+           reason: inspect(reason),
+           text_sample: text_sample
+         )}
     end
   end
 
@@ -208,7 +220,7 @@ defmodule LeXtract.Tokenizer do
       true
 
   """
-  @spec default_tokenizer() :: {:ok, tokenizer_ref()} | {:error, term()}
+  @spec default_tokenizer() :: {:ok, tokenizer_ref()} | {:error, Exception.t()}
   def default_tokenizer do
     GenServer.call(__MODULE__, :get_default_tokenizer, :infinity)
   end
@@ -266,12 +278,16 @@ defmodule LeXtract.Tokenizer do
         Logger.debug("Successfully loaded tokenizer: #{@default_tokenizer_identifier}")
         {:ok, tokenizer}
 
-      {:error, reason} = error ->
+      {:error, reason} ->
         Logger.error(
           "Failed to load tokenizer #{@default_tokenizer_identifier}: #{inspect(reason)}"
         )
 
-        error
+        {:error,
+         LeXtract.Error.External.TokenizerLoad.exception(
+           reason: inspect(reason),
+           model_identifier: @default_tokenizer_identifier
+         )}
     end
   end
 

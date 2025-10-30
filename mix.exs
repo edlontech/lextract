@@ -27,6 +27,7 @@ defmodule LeXtract.MixProject do
       {:mimic, "~> 2.0", only: :test},
       {:nimble_options, "~> 1.1"},
       {:req_llm, "~> 1.0.0-rc.7"},
+      {:splode, "~> 0.2.9"},
       {:text_chunker, "~> 0.5.2"},
       {:tokenizers, "~> 0.5.1"},
       {:uuid_v7, "~> 0.6.0"},
