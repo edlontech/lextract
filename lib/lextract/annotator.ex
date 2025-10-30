@@ -9,6 +9,73 @@ defmodule LeXtract.Annotator do
   4. Parses and aligns results
   5. Aggregates into AnnotatedDocument
 
+  ## Extraction Modes
+
+  The Annotator supports two modes of operation:
+
+  ### Text Generation Mode (Default)
+
+  Uses `ReqLLM.generate_text/3` to generate free-form text responses in JSON or YAML
+  format. The LLM response is parsed and converted to extractions.
+
+      template = %{
+        description: "Extract medication entities",
+        examples: [
+          %{
+            text: "Patient takes aspirin 100mg",
+            extractions: [
+              %{extraction_class: "Medication", name: "aspirin", dosage: "100mg"}
+            ]
+          }
+        ]
+      }
+
+      annotator = LeXtract.Annotator.new(template,
+        model: "gemini-2.0-flash",
+        provider: :gemini,
+        api_key: "your-api-key"
+      )
+
+      doc = LeXtract.Annotator.annotate_text(annotator, "Patient takes aspirin 100mg daily")
+
+  ### Structured Output Mode
+
+  Uses `ReqLLM.generate_object/4` to generate structured output with schema validation.
+  This mode automatically generates a schema from your examples and ensures the LLM
+  response conforms to the expected structure.
+
+  Enable with `:use_structured_output` option:
+
+      template = %{
+        description: "Extract medication entities with structured output",
+        examples: [
+          %{
+            text: "Patient takes aspirin 100mg twice daily",
+            extractions: [
+              %{
+                extraction_class: "Medication",
+                name: "aspirin",
+                dosage: "100mg",
+                frequency: "twice daily"
+              }
+            ]
+          }
+        ]
+      }
+
+      annotator = LeXtract.Annotator.new(template,
+        [model: "gemini-2.0-flash", provider: :gemini, api_key: "your-api-key"],
+        use_structured_output: true
+      )
+
+      doc = LeXtract.Annotator.annotate_text(annotator, "Patient takes aspirin 100mg twice daily")
+
+  Structured output mode offers several benefits:
+  - Automatic schema generation from examples
+  - Built-in validation by the LLM provider
+  - More reliable parsing (no JSON/YAML parsing errors)
+  - Better support for complex nested structures
+
   ## Examples
 
       iex> template = %{
@@ -38,20 +105,24 @@ defmodule LeXtract.Annotator do
     CharInterval,
     Chunking,
     Document,
+    ExampleData,
+    Extraction,
     FormatHandler,
     Prompting,
     Resolver,
+    Schema,
     Tokenizer
   }
 
   @type t :: %__MODULE__{
           prompt_generator: Prompting.t(),
           format_handler: FormatHandler.t(),
-          req_llm_config: keyword()
+          req_llm_config: keyword(),
+          use_structured_output: boolean()
         }
 
-  @enforce_keys [:prompt_generator, :format_handler, :req_llm_config]
-  defstruct [:prompt_generator, :format_handler, :req_llm_config]
+  @enforce_keys [:prompt_generator, :format_handler, :req_llm_config, :use_structured_output]
+  defstruct [:prompt_generator, :format_handler, :req_llm_config, :use_structured_output]
 
   @doc """
   Creates a new annotator.
@@ -67,6 +138,7 @@ defmodule LeXtract.Annotator do
     * `:format` - Output format (:json or :yaml, default: :yaml)
     * `:fence_output` - Whether to expect fenced output (default: false)
     * `:attribute_suffix` - Suffix for attributes (default: "_attributes")
+    * `:use_structured_output` - Use ReqLLM's generate_object/4 for structured output (default: false)
 
   ## Examples
 
@@ -82,6 +154,7 @@ defmodule LeXtract.Annotator do
     format = Keyword.get(opts, :format, :yaml)
     fence_output = Keyword.get(opts, :fence_output, false)
     attribute_suffix = Keyword.get(opts, :attribute_suffix, "_attributes")
+    use_structured_output = Keyword.get(opts, :use_structured_output, false)
 
     format_handler =
       FormatHandler.new(format,
@@ -94,7 +167,8 @@ defmodule LeXtract.Annotator do
     %__MODULE__{
       prompt_generator: prompt_generator,
       format_handler: format_handler,
-      req_llm_config: req_llm_config
+      req_llm_config: req_llm_config,
+      use_structured_output: use_structured_output
     }
   end
 
@@ -248,37 +322,22 @@ defmodule LeXtract.Annotator do
   end
 
   defp process_batch(annotator, chunks, _opts) do
-    prompts =
-      Enum.map(chunks, fn chunk ->
-        additional_context =
-          if chunk.document do
-            chunk.document.additional_context
-          else
-            nil
-          end
+    prompts = generate_prompts_for_chunks(chunks, annotator.prompt_generator)
 
-        Prompting.render(
-          annotator.prompt_generator,
-          chunk.text,
-          additional_context: additional_context
-        )
-      end)
+    responses =
+      if annotator.use_structured_output do
+        schema =
+          generate_schema_from_examples(annotator.prompt_generator, annotator.format_handler)
 
-    responses = call_req_llm(annotator.req_llm_config, prompts)
+        call_req_llm_object(annotator.req_llm_config, prompts, schema)
+      else
+        call_req_llm_text(annotator.req_llm_config, prompts)
+      end
 
     Enum.zip(chunks, responses)
     |> Enum.map(fn
-      {chunk, {:ok, response_text}} ->
-        extractions =
-          case Resolver.resolve(response_text, annotator.format_handler.format) do
-            {:ok, exts} ->
-              align_extractions_to_chunk(exts, chunk)
-
-            {:error, reason} ->
-              Logger.warning("Failed to parse LLM response: #{inspect(reason)}")
-              []
-          end
-
+      {chunk, {:ok, response_data}} ->
+        extractions = process_response(annotator, response_data, chunk)
         {chunk, extractions}
 
       {chunk, {:error, reason}} ->
@@ -290,7 +349,39 @@ defmodule LeXtract.Annotator do
     end)
   end
 
-  defp call_req_llm(req_llm_config, prompts) do
+  defp generate_prompts_for_chunks(chunks, prompt_generator) do
+    Enum.map(chunks, fn chunk ->
+      additional_context =
+        if chunk.document do
+          chunk.document.additional_context
+        else
+          nil
+        end
+
+      Prompting.render(
+        prompt_generator,
+        chunk.text,
+        additional_context: additional_context
+      )
+    end)
+  end
+
+  defp process_response(%{use_structured_output: true}, object, chunk) do
+    parse_structured_response(object, chunk)
+  end
+
+  defp process_response(annotator, response_text, chunk) do
+    case Resolver.resolve(response_text, annotator.format_handler.format) do
+      {:ok, exts} ->
+        align_extractions_to_chunk(exts, chunk)
+
+      {:error, reason} ->
+        Logger.warning("Failed to parse LLM response: #{inspect(reason)}")
+        []
+    end
+  end
+
+  defp call_req_llm_text(req_llm_config, prompts) do
     model = Keyword.fetch!(req_llm_config, :model)
     max_concurrency = Keyword.get(req_llm_config, :max_concurrency, 8)
 
@@ -309,6 +400,33 @@ defmodule LeXtract.Annotator do
 
       {:ok, {:error, reason}} ->
         Logger.error("ReqLLM inference failed: #{inspect(reason)}")
+        {:error, reason}
+
+      {:exit, reason} ->
+        Logger.error("ReqLLM task crashed: #{inspect(reason)}")
+        {:error, {:task_exit, reason}}
+    end)
+  end
+
+  defp call_req_llm_object(req_llm_config, prompts, schema) do
+    model = Keyword.fetch!(req_llm_config, :model)
+    max_concurrency = Keyword.get(req_llm_config, :max_concurrency, 8)
+
+    prompts
+    |> Task.async_stream(
+      fn prompt ->
+        ReqLLM.generate_object(model, prompt, schema, req_llm_config)
+      end,
+      max_concurrency: max_concurrency,
+      ordered: true,
+      timeout: :infinity
+    )
+    |> Enum.map(fn
+      {:ok, {:ok, response}} ->
+        {:ok, extract_response_object(response)}
+
+      {:ok, {:error, reason}} ->
+        Logger.error("ReqLLM structured inference failed: #{inspect(reason)}")
         {:error, reason}
 
       {:exit, reason} ->
@@ -387,5 +505,99 @@ defmodule LeXtract.Annotator do
       {_, nil} -> false
       {i1, i2} -> i1.start_pos < i2.end_pos and i2.start_pos < i1.end_pos
     end
+  end
+
+  defp generate_schema_from_examples(prompt_generator, format_handler) do
+    examples =
+      Enum.map(prompt_generator.template.examples, fn example ->
+        output_map =
+          case convert_example_to_schema_format(example.extractions, format_handler) do
+            [] -> %{"extractions" => []}
+            extractions -> %{"extractions" => extractions}
+          end
+
+        %ExampleData{
+          input: example.text,
+          output: output_map
+        }
+      end)
+
+    Schema.from_examples(examples)
+  end
+
+  defp convert_example_to_schema_format(extractions, format_handler) do
+    Enum.map(extractions, fn extraction ->
+      class = Map.get(extraction, :extraction_class) || Map.get(extraction, "extraction_class")
+      attributes_key = "#{class}#{format_handler.attribute_suffix}"
+
+      base_map = %{"class" => class}
+
+      attributes =
+        extraction
+        |> Map.drop([:extraction_class, "extraction_class", :extraction_text, "extraction_text"])
+        |> Enum.into(%{})
+
+      if map_size(attributes) > 0 do
+        Map.put(base_map, attributes_key, attributes)
+      else
+        base_map
+      end
+    end)
+  end
+
+  defp extract_response_object(%ReqLLM.Response{object: object}) when is_map(object) do
+    object
+  end
+
+  defp extract_response_object(%ReqLLM.Response{} = response) do
+    Logger.warning("Unexpected ReqLLM response format for object: #{inspect(response)}")
+    %{"extractions" => []}
+  end
+
+  defp extract_response_object(response) do
+    Logger.warning("Unexpected response type for object: #{inspect(response)}")
+    %{"extractions" => []}
+  end
+
+  defp parse_structured_response(object, chunk) do
+    extractions = Map.get(object, "extractions", []) || Map.get(object, :extractions, [])
+
+    extraction_structs =
+      Enum.map(extractions, fn extraction_data ->
+        convert_object_to_extraction(extraction_data)
+      end)
+
+    align_extractions_to_chunk(extraction_structs, chunk)
+  end
+
+  defp convert_object_to_extraction(extraction_data) when is_map(extraction_data) do
+    class = Map.get(extraction_data, "class") || Map.get(extraction_data, :class)
+
+    attributes =
+      extraction_data
+      |> Enum.filter(fn {key, _value} ->
+        key_str = to_string(key)
+        String.ends_with?(key_str, "_attributes")
+      end)
+      |> Enum.flat_map(fn {_key, attrs} ->
+        if is_map(attrs), do: Map.to_list(attrs), else: []
+      end)
+      |> Enum.into(%{})
+
+    extraction_text = Map.get(attributes, "text") || Map.get(attributes, :text)
+
+    attributes_without_text =
+      if map_size(attributes) > 0 do
+        attributes
+        |> Map.drop(["text", :text])
+      else
+        nil
+      end
+
+    %Extraction{
+      extraction_class: class,
+      extraction_text: extraction_text,
+      attributes: attributes_without_text
+    }
   end
 end

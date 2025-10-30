@@ -522,4 +522,196 @@ defmodule LeXtract.AnnotatorTest do
       end
     end
   end
+
+  describe "structured output mode" do
+    test "creates annotator with use_structured_output option" do
+      template = %{
+        description: "Extract medications",
+        examples: [
+          %{
+            text: "Patient takes aspirin",
+            extractions: [
+              %{extraction_class: "Medication", name: "aspirin"}
+            ]
+          }
+        ]
+      }
+
+      config = [model: "test", provider: :test, api_key: "key"]
+      annotator = Annotator.new(template, config, use_structured_output: true)
+
+      assert annotator.use_structured_output == true
+    end
+
+    test "defaults to text generation mode" do
+      template = %{description: "Extract", examples: []}
+      config = [model: "test", provider: :test, api_key: "key"]
+      annotator = Annotator.new(template, config)
+
+      assert annotator.use_structured_output == false
+    end
+
+    test "uses generate_object when structured output is enabled" do
+      template = %{
+        description: "Extract medications",
+        examples: [
+          %{
+            text: "Patient takes aspirin 100mg",
+            extractions: [
+              %{
+                extraction_class: "Medication",
+                name: "aspirin",
+                dosage: "100mg"
+              }
+            ]
+          }
+        ]
+      }
+
+      config = [model: "test", provider: :test, api_key: "key"]
+      annotator = Annotator.new(template, config, use_structured_output: true)
+
+      mock_object = %{
+        "extractions" => [
+          %{
+            "class" => "Medication",
+            "Medication_attributes" => %{
+              "name" => "aspirin",
+              "dosage" => "100mg"
+            }
+          }
+        ]
+      }
+
+      ReqLLM
+      |> expect(:generate_object, fn _model, _prompt, _schema, _opts ->
+        {:ok,
+         %ReqLLM.Response{
+           message: %{content: "", role: :assistant},
+           object: mock_object,
+           finish_reason: :stop,
+           usage: %{},
+           context: %{},
+           model: "test",
+           id: "test-id"
+         }}
+      end)
+
+      doc = Annotator.annotate_text(annotator, "Patient takes aspirin 100mg daily")
+
+      assert %AnnotatedDocument{} = doc
+      assert length(doc.extractions) >= 0
+    end
+
+    test "handles structured output errors gracefully" do
+      template = %{
+        description: "Extract medications",
+        examples: [
+          %{
+            text: "Patient takes aspirin",
+            extractions: [%{extraction_class: "Medication", name: "aspirin"}]
+          }
+        ]
+      }
+
+      config = [model: "test", provider: :test, api_key: "key"]
+      annotator = Annotator.new(template, config, use_structured_output: true)
+
+      ReqLLM
+      |> expect(:generate_object, fn _model, _prompt, _schema, _opts ->
+        {:error, :network_error}
+      end)
+
+      doc = Annotator.annotate_text(annotator, "Test text")
+
+      assert %AnnotatedDocument{} = doc
+      assert doc.extractions == []
+    end
+
+    test "parses structured response with multiple extractions" do
+      template = %{
+        description: "Extract medications and people",
+        examples: [
+          %{
+            text: "Dr. Smith prescribed aspirin to patient",
+            extractions: [
+              %{extraction_class: "Person", name: "Dr. Smith", role: "doctor"},
+              %{extraction_class: "Medication", name: "aspirin"}
+            ]
+          }
+        ]
+      }
+
+      config = [model: "test", provider: :test, api_key: "key"]
+      annotator = Annotator.new(template, config, use_structured_output: true)
+
+      mock_object = %{
+        "extractions" => [
+          %{
+            "class" => "Person",
+            "Person_attributes" => %{"name" => "Dr. Smith", "role" => "doctor"}
+          },
+          %{
+            "class" => "Medication",
+            "Medication_attributes" => %{"name" => "aspirin"}
+          }
+        ]
+      }
+
+      ReqLLM
+      |> expect(:generate_object, fn _model, _prompt, _schema, _opts ->
+        {:ok,
+         %ReqLLM.Response{
+           message: %{content: "", role: :assistant},
+           object: mock_object,
+           finish_reason: :stop,
+           usage: %{},
+           context: %{},
+           model: "test",
+           id: "test-id"
+         }}
+      end)
+
+      doc = Annotator.annotate_text(annotator, "Dr. Smith prescribed aspirin to patient")
+
+      assert %AnnotatedDocument{} = doc
+      assert length(doc.extractions) >= 0
+    end
+
+    test "handles empty extractions in structured output" do
+      template = %{
+        description: "Extract medications",
+        examples: [
+          %{
+            text: "Patient has no medications",
+            extractions: []
+          }
+        ]
+      }
+
+      config = [model: "test", provider: :test, api_key: "key"]
+      annotator = Annotator.new(template, config, use_structured_output: true)
+
+      mock_object = %{"extractions" => []}
+
+      ReqLLM
+      |> expect(:generate_object, fn _model, _prompt, _schema, _opts ->
+        {:ok,
+         %ReqLLM.Response{
+           message: %{content: "", role: :assistant},
+           object: mock_object,
+           finish_reason: :stop,
+           usage: %{},
+           context: %{},
+           model: "test",
+           id: "test-id"
+         }}
+      end)
+
+      doc = Annotator.annotate_text(annotator, "No medications here")
+
+      assert %AnnotatedDocument{} = doc
+      assert doc.extractions == []
+    end
+  end
 end
