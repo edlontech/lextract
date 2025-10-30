@@ -5,9 +5,26 @@ defmodule LeXtract.MixProject do
     [
       app: :lextract,
       version: "0.1.0",
+      description: description(),
+      package: package(),
+      aliases: aliases(),
       elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
+      test_coverage: [tool: ExCoveralls],
+      dialyzer: [
+        plt_core_path: "_plts/core"
+      ],
+      source_url: "https://github.com/YgorCastor/lextract.git",
+      homepage_url: "https://github.com/YgorCastor/lextract.git",
+      docs: [
+        main: "readme",
+        extras: [
+          "CHANGELOG.md": [title: "Changelog"],
+          "README.md": [title: "Introduction"],
+          LICENSE: [title: "License"]
+        ]
+      ],
       deps: deps()
     ]
   end
@@ -23,8 +40,11 @@ defmodule LeXtract.MixProject do
     [
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:ex_check, "~> 0.16", only: [:dev, :test], runtime: false},
+      {:excoveralls, "~> 0.14", only: :test},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false, warn_if_outdated: true},
       {:mimic, "~> 2.0", only: :test},
+      {:mix_audit, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:nimble_options, "~> 1.1"},
       {:req_llm, "~> 1.0.0-rc.8"},
       {:splode, "~> 0.2.9"},
@@ -38,4 +58,27 @@ defmodule LeXtract.MixProject do
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
+
+  def cli do
+    [preferred_envs: ["test.integration": :test]]
+  end
+
+  defp aliases do
+    [
+      test: ["test --exclude integration"],
+      "test.integration": ["test --only integration"]
+    ]
+  end
+
+  defp description() do
+    "LLM-powered text extraction library for Elixir. Based on Google's LangExtract"
+  end
+
+  defp package() do
+    [
+      licenses: ["MIT"],
+      links: %{"GitHub" => "https://github.com/YgorCastor/lextract.git"},
+      sponsor: "ycastor.eth"
+    ]
+  end
 end

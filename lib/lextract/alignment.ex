@@ -381,7 +381,12 @@ defmodule LeXtract.Alignment do
       source_tokens
       |> Enum.chunk_every(needle_length, 1, :discard)
       |> find_fuzzy_matches(needle_str, threshold, occurrence_index)
-      |> convert_match_to_interval(special_token_offset, needle_length, source_encoding, occurrence_index)
+      |> convert_match_to_interval(
+        special_token_offset,
+        needle_length,
+        source_encoding,
+        occurrence_index
+      )
     end
   end
 
@@ -392,12 +397,24 @@ defmodule LeXtract.Alignment do
     end)
   end
 
-  defp process_fuzzy_window(_window, {idx, matches, count}, _needle_str, _threshold, occurrence_index)
+  defp process_fuzzy_window(
+         _window,
+         {idx, matches, count},
+         _needle_str,
+         _threshold,
+         occurrence_index
+       )
        when count > occurrence_index do
     {:halt, {idx, matches, count}}
   end
 
-  defp process_fuzzy_window(window, {idx, matches, count}, needle_str, threshold, _occurrence_index) do
+  defp process_fuzzy_window(
+         window,
+         {idx, matches, count},
+         needle_str,
+         threshold,
+         _occurrence_index
+       ) do
     window_str = Enum.join(window, " ")
     similarity = String.jaro_distance(needle_str, window_str)
 

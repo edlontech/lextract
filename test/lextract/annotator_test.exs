@@ -1,6 +1,7 @@
 defmodule LeXtract.AnnotatorTest do
   use ExUnit.Case, async: false
   use Mimic
+  import ExUnit.CaptureLog
 
   alias LeXtract.{AnnotatedDocument, Annotator, Document}
 
@@ -177,10 +178,12 @@ defmodule LeXtract.AnnotatorTest do
          }}
       end)
 
-      doc = Annotator.annotate_text(annotator, "Test text")
+      capture_log(fn ->
+        doc = Annotator.annotate_text(annotator, "Test text")
 
-      assert %AnnotatedDocument{} = doc
-      assert doc.extractions == []
+        assert %AnnotatedDocument{} = doc
+        assert doc.extractions == []
+      end)
     end
   end
 
@@ -410,10 +413,12 @@ defmodule LeXtract.AnnotatorTest do
         {:error, :network_error}
       end)
 
-      doc = Annotator.annotate_text(annotator, "Test")
+      capture_log(fn ->
+        doc = Annotator.annotate_text(annotator, "Test")
 
-      assert %AnnotatedDocument{} = doc
-      assert doc.extractions == []
+        assert %AnnotatedDocument{} = doc
+        assert doc.extractions == []
+      end)
     end
 
     test "handles alignment failures gracefully" do
@@ -622,10 +627,12 @@ defmodule LeXtract.AnnotatorTest do
         {:error, :network_error}
       end)
 
-      doc = Annotator.annotate_text(annotator, "Test text")
+      capture_log(fn ->
+        doc = Annotator.annotate_text(annotator, "Test text")
 
-      assert %AnnotatedDocument{} = doc
-      assert doc.extractions == []
+        assert %AnnotatedDocument{} = doc
+        assert doc.extractions == []
+      end)
     end
 
     test "parses structured response with multiple extractions" do
