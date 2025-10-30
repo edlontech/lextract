@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/YgorCastor/lextract/compare/v0.1.0...v0.1.1) (2025-10-30)
+
+
+### Bug Fixes
+
+* Unifing the configs ([5161da8](https://github.com/YgorCastor/lextract/commit/5161da8c2256d622f1726332d22bc885fa38124a))
+
 ## 0.1.0 (2025-10-30)
 
 
