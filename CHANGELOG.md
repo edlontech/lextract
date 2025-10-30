@@ -1,0 +1,23 @@
+# Changelog
+
+## 0.1.0 (2025-10-30)
+
+
+### Features
+
+* Implement Alignment ([30fea32](https://github.com/YgorCastor/lextract/commit/30fea3223bca3c61115a53170979124fc3db0737))
+* Implement Annotation pipeline ([712f80e](https://github.com/YgorCastor/lextract/commit/712f80ea37c4e356f4cfd2fec40085090c19eb03))
+* Implements Chunking ([26df4cd](https://github.com/YgorCastor/lextract/commit/26df4cd8e3796fbe3b6107509bb02d3dea411598))
+* Implements output Schema ([5568b0f](https://github.com/YgorCastor/lextract/commit/5568b0fe6c95fc15388b92ccd02b1323b31b912a))
+* Implements Tokenizer ([c547430](https://github.com/YgorCastor/lextract/commit/c5474307b8c91d4a95f5c6b89f4ef0d9ef659fe9))
+* Main Api ([ef5104e](https://github.com/YgorCastor/lextract/commit/ef5104e25c65e3eadb939417fc66eac6661a31d3))
+
+
+### Bug Fixes
+
+* Making api_key option not mandatory ([8b4601f](https://github.com/YgorCastor/lextract/commit/8b4601fbe0df65b37b220320724271ab40066b4a))
+
+
+### Continuous Integration
+
+* Added Release Please ([358d531](https://github.com/YgorCastor/lextract/commit/358d53106c6b1609d34f9a43d6c009e02505c247))
