@@ -1,6 +1,6 @@
 # LeXtract
 
-[![Hex](https://img.shields.io/hexpm/v/lextract?style=flat-square)](https://hex.pm/packages/lextract)
+[![Hex](https://img.shields.io/hexpm/v/lextract?style=flat-square)](https://hex.pm/packages/lextract) [![Coverage Status](https://coveralls.io/repos/github/YgorCastor/lextract/badge.svg?branch=master)](https://coveralls.io/github/YgorCastor/lextract?branch=master)
 
 LLM-powered text extraction library for Elixir. Based on Google's [LangExtract](https://github.com/google/langextract)
 

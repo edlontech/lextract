@@ -71,6 +71,7 @@ defmodule LeXtract.MixProject do
       preferred_envs: [
         coveralls: :test,
         "coveralls.post": :test,
+        "coveralls.github": :test,
         "coveralls.html": :test,
         "test.integration": :test
       ]
