@@ -101,18 +101,6 @@ defmodule LeXtractTest do
       assert Exception.message(error) =~ "provider"
     end
 
-    test "returns error for missing required api_key" do
-      {:error, error} =
-        LeXtract.validate_options(
-          prompt: "Extract",
-          model: "gpt-4o-mini",
-          provider: :openai
-        )
-
-      assert Exception.message(error) =~ "required"
-      assert Exception.message(error) =~ "api_key"
-    end
-
     test "returns error for invalid temperature type" do
       {:error, error} =
         LeXtract.validate_options(

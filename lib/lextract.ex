@@ -29,7 +29,7 @@ defmodule LeXtract do
     ],
     api_key: [
       type: :string,
-      required: true,
+      required: false,
       doc: "API key for the LLM provider"
     ],
     format: [
@@ -361,7 +361,7 @@ defmodule LeXtract do
     base_config = [
       model: "#{provider}:#{model}",
       provider: provider,
-      api_key: Keyword.fetch!(opts, :api_key),
+      api_key: Keyword.fetch(opts, :api_key),
       max_concurrency: Keyword.get(opts, :max_concurrency, 8)
     ]
 
