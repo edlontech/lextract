@@ -48,7 +48,7 @@ defmodule LeXtract.MixProject do
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_check, "~> 0.16", only: [:dev, :test], runtime: false},
-      {:excoveralls, "~> 0.18", only: :test},
+      {:excoveralls, "~> 0.18", only: [:dev, :test]},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false, warn_if_outdated: true},
       {:mimic, "~> 2.0", only: :test},
       {:mix_audit, ">= 0.0.0", only: [:dev, :test], runtime: false},
@@ -67,7 +67,14 @@ defmodule LeXtract.MixProject do
   defp elixirc_paths(_), do: ["lib"]
 
   def cli do
-    [preferred_envs: ["test.integration": :test]]
+    [
+      preferred_envs: [
+        coveralls: :test,
+        "coveralls.post": :test,
+        "coveralls.html": :test,
+        "test.integration": :test
+      ]
+    ]
   end
 
   defp aliases do
