@@ -13,7 +13,7 @@ defmodule LeXtract.ConfigTest do
       assert config.api_key == nil
       assert config.max_char_buffer == 1000
       assert config.chunk_overlap == 200
-      assert config.temperature == nil
+      assert config.temperature == 0.2
       assert config.format == :yaml
       assert config.batch_size == 5
       assert config.max_concurrency == 8

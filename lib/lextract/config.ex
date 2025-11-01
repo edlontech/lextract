@@ -94,11 +94,13 @@ defmodule LeXtract.Config do
                     ],
                     temperature: [
                       type: {:custom, __MODULE__, :validate_temperature, []},
+                      default: 0.2,
                       doc: "LLM sampling temperature (0.0-1.0)",
                       type_spec: quote(do: float() | nil)
                     ],
                     max_tokens: [
                       type: :pos_integer,
+                      default: 4096,
                       doc: "Maximum tokens in LLM response"
                     ],
                     timeout: [
@@ -153,8 +155,8 @@ defmodule LeXtract.Config do
             batch_size: 5,
             extraction_passes: 1,
             max_concurrency: 8,
-            temperature: nil,
-            max_tokens: nil,
+            temperature: 0.2,
+            max_tokens: 4096,
             timeout: 60_000,
             attribute_suffix: "_attributes"
 
