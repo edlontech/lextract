@@ -54,12 +54,12 @@ defmodule LeXtract.MixProject do
       {:mix_audit, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:nimble_options, "~> 1.1"},
       {:req_llm, "~> 1.0.0-rc.8"},
-      {:splode, "~> 0.2.9"},
-      {:text_chunker, "~> 0.5.2"},
-      {:tokenizers, "~> 0.5.1"},
+      {:splode, "~> 0.2"},
+      {:text_chunker, "~> 0.5"},
+      {:tokenizers, "~> 0.5"},
       {:uuid_v7, "~> 0.6.0"},
       {:yaml_elixir, "~> 2.11"},
-      {:zoi, "~> 0.7.0"}
+      {:zoi, "~> 0.8"}
     ]
   end
 

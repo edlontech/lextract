@@ -41,5 +41,5 @@
   "uuid_v7": {:hex, :uuid_v7, "0.6.0", "1d65727ade8ca619ed40fdef90c4186b50c84657d2b412f7cb79777ab2d47559", [:mix], [{:ecto, "~> 3.0", [hex: :ecto, repo: "hexpm", optional: true]}], "hexpm", "1dc401134e61da847a7b2a3b28d2593893f457b9f2704893b1ba3ff7946ce91f"},
   "yamerl": {:hex, :yamerl, "0.10.0", "4ff81fee2f1f6a46f1700c0d880b24d193ddb74bd14ef42cb0bcf46e81ef2f8e", [:rebar3], [], "hexpm", "346adb2963f1051dc837a2364e4acf6eb7d80097c0f53cbdc3046ec8ec4b4e6e"},
   "yaml_elixir": {:hex, :yaml_elixir, "2.12.0", "30343ff5018637a64b1b7de1ed2a3ca03bc641410c1f311a4dbdc1ffbbf449c7", [:mix], [{:yamerl, "~> 0.10", [hex: :yamerl, repo: "hexpm", optional: false]}], "hexpm", "ca6bacae7bac917a7155dca0ab6149088aa7bc800c94d0fe18c5238f53b313c6"},
-  "zoi": {:hex, :zoi, "0.7.4", "12d1c9b9944f49244218fc6922abcfa62c443d35bcf90e0e788493b31dfe28dc", [:mix], [{:decimal, "~> 2.0", [hex: :decimal, repo: "hexpm", optional: true]}], "hexpm", "594ae3b5ecf4c19c3b15bf8946af97dfa5e8cb260651559a226d9aab97d0f3d7"},
+  "zoi": {:hex, :zoi, "0.8.4", "7699054e980aafc1ad6aff3f96ec83ce48ca96f80303f05baebd58fa997695e9", [:mix], [{:decimal, "~> 2.0", [hex: :decimal, repo: "hexpm", optional: true]}], "hexpm", "38d1c82d52d53002ba0a32966cb48d909dac827d979e4884c61f3022f5a3cbae"},
 }
