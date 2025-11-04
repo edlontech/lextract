@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.2](https://github.com/YgorCastor/lextract/compare/v0.1.1...v0.1.2) (2025-11-04)
+
+
+### Bug Fixes
+
+* Fixed default configs ([2f65637](https://github.com/YgorCastor/lextract/commit/2f65637afe2aebc647ce8d6638d044c775027845))
+* Updated req_llm to the released version ([9a8fc9f](https://github.com/YgorCastor/lextract/commit/9a8fc9fc1274e6e8149aebef2cc9f4214223f049))
+
 ## [0.1.1](https://github.com/YgorCastor/lextract/compare/v0.1.0...v0.1.1) (2025-10-30)
 
 

@@ -4,7 +4,7 @@ defmodule LeXtract.MixProject do
   def project do
     [
       app: :lextract,
-      version: "0.1.1",
+      version: "0.1.2",
       description: description(),
       package: package(),
       aliases: aliases(),
