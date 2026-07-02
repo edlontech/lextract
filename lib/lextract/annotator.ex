@@ -5,7 +5,7 @@ defmodule LeXtract.Annotator do
   The core extraction orchestrator that:
   1. Chunks documents
   2. Generates prompts
-  3. Calls LLM via ReqLLM
+  3. Calls the configured `LeXtract.LLM` adapter
   4. Parses and aligns results
   5. Aggregates into AnnotatedDocument
 
@@ -15,8 +15,8 @@ defmodule LeXtract.Annotator do
 
   ### Text Generation Mode (Default)
 
-  Uses `ReqLLM.generate_text/3` to generate free-form text responses in JSON or YAML
-  format. The LLM response is parsed and converted to extractions.
+  Uses the adapter's `generate_text/2` callback to generate free-form text responses
+  in JSON or YAML format. The LLM response is parsed and converted to extractions.
 
       template = %{
         description: "Extract medication entities",
@@ -31,18 +31,17 @@ defmodule LeXtract.Annotator do
       }
 
       annotator = LeXtract.Annotator.new(template,
-        model: "gemini-2.0-flash",
-        provider: :gemini,
-        api_key: "your-api-key"
+        {LeXtract.LLM.ReqLLM,
+         [model: "gemini-2.0-flash", provider: :gemini, api_key: "your-api-key"]}
       )
 
       doc = LeXtract.Annotator.annotate_text(annotator, "Patient takes aspirin 100mg daily")
 
   ### Structured Output Mode
 
-  Uses `ReqLLM.generate_object/4` to generate structured output with schema validation.
-  This mode automatically generates a schema from your examples and ensures the LLM
-  response conforms to the expected structure.
+  Uses the adapter's `generate_object/3` callback to generate structured output with
+  schema validation. This mode automatically generates a schema from your examples and
+  ensures the LLM response conforms to the expected structure.
 
   Enable with `:use_structured_output` option:
 
@@ -64,7 +63,8 @@ defmodule LeXtract.Annotator do
       }
 
       annotator = LeXtract.Annotator.new(template,
-        [model: "gemini-2.0-flash", provider: :gemini, api_key: "your-api-key"],
+        {LeXtract.LLM.ReqLLM,
+         [model: "gemini-2.0-flash", provider: :gemini, api_key: "your-api-key"]},
         use_structured_output: true
       )
 
@@ -88,9 +88,8 @@ defmodule LeXtract.Annotator do
       ...>   ]
       ...> }
       iex> annotator = LeXtract.Annotator.new(template,
-      ...>   model: "gemini-2.0-flash",
-      ...>   provider: :gemini,
-      ...>   api_key: "test-key"
+      ...>   {LeXtract.LLM.ReqLLM,
+      ...>    [model: "gemini-2.0-flash", provider: :gemini, api_key: "test-key"]}
       ...> )
       iex> is_struct(annotator, LeXtract.Annotator)
       true
@@ -117,12 +116,28 @@ defmodule LeXtract.Annotator do
   @type t :: %__MODULE__{
           prompt_generator: Prompting.t(),
           format_handler: FormatHandler.t(),
-          req_llm_config: keyword(),
+          llm_adapter: module(),
+          llm_opts: keyword(),
+          max_concurrency: pos_integer(),
           use_structured_output: boolean()
         }
 
-  @enforce_keys [:prompt_generator, :format_handler, :req_llm_config, :use_structured_output]
-  defstruct [:prompt_generator, :format_handler, :req_llm_config, :use_structured_output]
+  @enforce_keys [
+    :prompt_generator,
+    :format_handler,
+    :llm_adapter,
+    :llm_opts,
+    :max_concurrency,
+    :use_structured_output
+  ]
+  defstruct [
+    :prompt_generator,
+    :format_handler,
+    :llm_adapter,
+    :llm_opts,
+    :max_concurrency,
+    :use_structured_output
+  ]
 
   @doc """
   Creates a new annotator.
@@ -130,7 +145,7 @@ defmodule LeXtract.Annotator do
   ## Parameters
 
     * `prompt_template` - Template with description and examples
-    * `req_llm_config` - ReqLLM configuration (model, provider, API keys, etc.)
+    * `{llm_adapter, llm_opts}` - The `LeXtract.LLM` adapter module and its opts
     * `opts` - Options (see below)
 
   ## Options
@@ -138,23 +153,25 @@ defmodule LeXtract.Annotator do
     * `:format` - Output format (:json or :yaml, default: :yaml)
     * `:fence_output` - Whether to expect fenced output (default: false)
     * `:attribute_suffix` - Suffix for attributes (default: "_attributes")
-    * `:use_structured_output` - Use ReqLLM's generate_object/4 for structured output (default: false)
+    * `:use_structured_output` - Use the adapter's generate_object/3 for structured output (default: false)
+    * `:max_concurrency` - Max concurrent LLM calls via Task.async_stream (default: 8)
 
   ## Examples
 
       iex> template = %{description: "Extract entities", examples: []}
-      iex> config = [model: "gemini-2.0-flash", provider: :gemini, api_key: "test"]
-      iex> annotator = LeXtract.Annotator.new(template, config)
+      iex> llm = {LeXtract.LLM.ReqLLM, [model: "gemini-2.0-flash", provider: :gemini, api_key: "test"]}
+      iex> annotator = LeXtract.Annotator.new(template, llm)
       iex> annotator.format_handler.format
       :yaml
 
   """
-  @spec new(Prompting.template(), keyword(), keyword()) :: t()
-  def new(prompt_template, req_llm_config, opts \\ []) do
+  @spec new(Prompting.template(), {module(), keyword()}, keyword()) :: t()
+  def new(prompt_template, {llm_adapter, llm_opts}, opts \\ []) do
     format = Keyword.get(opts, :format, :yaml)
     fence_output = Keyword.get(opts, :fence_output, false)
     attribute_suffix = Keyword.get(opts, :attribute_suffix, "_attributes")
     use_structured_output = Keyword.get(opts, :use_structured_output, false)
+    max_concurrency = Keyword.get(opts, :max_concurrency, 8)
 
     format_handler =
       FormatHandler.new(format,
@@ -167,7 +184,9 @@ defmodule LeXtract.Annotator do
     %__MODULE__{
       prompt_generator: prompt_generator,
       format_handler: format_handler,
-      req_llm_config: req_llm_config,
+      llm_adapter: llm_adapter,
+      llm_opts: llm_opts,
+      max_concurrency: max_concurrency,
       use_structured_output: use_structured_output
     }
   end
@@ -191,11 +210,10 @@ defmodule LeXtract.Annotator do
 
       iex> template = %{description: "Extract entities", examples: []}
       iex> annotator = LeXtract.Annotator.new(template,
-      ...>   model: "gemini-2.0-flash",
-      ...>   provider: :gemini,
-      ...>   api_key: "test"
+      ...>   {LeXtract.LLM.ReqLLM,
+      ...>    [model: "gemini-2.0-flash", provider: :gemini, api_key: "test"]}
       ...> )
-      iex> # Note: This example would require mocking ReqLLM in real tests
+      iex> # Note: This example would require a real or stubbed LLM adapter
       iex> is_struct(annotator, LeXtract.Annotator)
       true
 
@@ -329,10 +347,10 @@ defmodule LeXtract.Annotator do
         schema =
           generate_schema_from_examples(annotator.prompt_generator, annotator.format_handler)
 
-        call_req_llm_object(annotator.req_llm_config, prompts, schema)
+        call_llm_object(annotator, prompts, schema)
       else
         prompts = generate_prompts_for_chunks(chunks, annotator.prompt_generator)
-        call_req_llm_text(annotator.req_llm_config, prompts)
+        call_llm_text(annotator, prompts)
       end
 
     Enum.zip(chunks, responses)
@@ -404,149 +422,52 @@ defmodule LeXtract.Annotator do
     end
   end
 
-  defp call_req_llm_text(req_llm_config, prompts) do
-    model = Keyword.fetch!(req_llm_config, :model)
-    max_concurrency = Keyword.get(req_llm_config, :max_concurrency, 8)
-    llm_opts = Keyword.drop(req_llm_config, [:model, :max_concurrency, :api_key, :provider])
-
+  defp call_llm_text(annotator, prompts) do
     prompts
     |> Task.async_stream(
       fn prompt ->
-        ReqLLM.generate_text(model, prompt, llm_opts)
+        annotator.llm_adapter.generate_text(prompt, annotator.llm_opts)
       end,
-      max_concurrency: max_concurrency,
+      max_concurrency: annotator.max_concurrency,
       ordered: true,
       timeout: :infinity
     )
     |> Enum.map(fn
-      {:ok, {:ok, response}} ->
-        {:ok, extract_response_text(response)}
+      {:ok, {:ok, text}} ->
+        {:ok, text}
 
       {:ok, {:error, reason}} ->
-        Logger.error("ReqLLM inference failed: #{inspect(reason)}")
+        Logger.error("LLM inference failed: #{inspect(reason)}")
         {:error, reason}
 
       {:exit, reason} ->
-        Logger.error("ReqLLM task crashed: #{inspect(reason)}")
+        Logger.error("LLM task crashed: #{inspect(reason)}")
         {:error, {:task_exit, reason}}
     end)
   end
 
-  defp call_req_llm_object(req_llm_config, prompts, schema) do
-    model = Keyword.fetch!(req_llm_config, :model)
-    provider = Keyword.get(req_llm_config, :provider)
-    max_concurrency = Keyword.get(req_llm_config, :max_concurrency, 8)
-    llm_opts = Keyword.drop(req_llm_config, [:model, :max_concurrency, :api_key, :provider])
-
-    final_schema =
-      if provider == :openai do
-        build_openai_strict_json_schema(schema)
-      else
-        schema
-      end
-
+  defp call_llm_object(annotator, prompts, schema) do
     prompts
     |> Task.async_stream(
       fn prompt ->
-        ReqLLM.generate_object(model, prompt, final_schema, llm_opts)
+        annotator.llm_adapter.generate_object(prompt, schema, annotator.llm_opts)
       end,
-      max_concurrency: max_concurrency,
+      max_concurrency: annotator.max_concurrency,
       ordered: true,
       timeout: :infinity
     )
     |> Enum.map(fn
-      {:ok, {:ok, response}} ->
-        {:ok, extract_response_object(response)}
+      {:ok, {:ok, object}} ->
+        {:ok, object}
 
       {:ok, {:error, reason}} ->
-        Logger.error("ReqLLM structured inference failed: #{inspect(reason)}")
+        Logger.error("LLM structured inference failed: #{inspect(reason)}")
         {:error, reason}
 
       {:exit, reason} ->
-        Logger.error("ReqLLM task crashed: #{inspect(reason)}")
+        Logger.error("LLM task crashed: #{inspect(reason)}")
         {:error, {:task_exit, reason}}
     end)
-  end
-
-  defp build_openai_strict_json_schema(schema) when is_list(schema) do
-    extractions_spec = Keyword.get(schema, :extractions, [])
-    keys = Keyword.get(extractions_spec, :keys, [])
-
-    properties =
-      Enum.into(keys, %{}, fn {key, opts} ->
-        {to_string(key), build_property_schema(opts)}
-      end)
-
-    required_keys = Map.keys(properties)
-
-    items_schema = %{
-      "type" => "object",
-      "properties" => properties,
-      "required" => required_keys,
-      "additionalProperties" => false
-    }
-
-    %{
-      "type" => "object",
-      "properties" => %{
-        "extractions" => %{
-          "type" => "array",
-          "items" => items_schema,
-          "description" => Keyword.get(extractions_spec, :doc, "List of extracted entities")
-        }
-      },
-      "required" => ["extractions"],
-      "additionalProperties" => false
-    }
-  end
-
-  defp build_property_schema(opts) do
-    base =
-      case Keyword.get(opts, :type, :string) do
-        :string ->
-          %{"type" => "string"}
-
-        :integer ->
-          %{"type" => "integer"}
-
-        :map ->
-          %{
-            "type" => "object",
-            "properties" => %{},
-            "required" => [],
-            "additionalProperties" => false
-          }
-
-        _ ->
-          %{"type" => "string"}
-      end
-
-    case Keyword.get(opts, :doc) do
-      nil -> base
-      doc -> Map.put(base, "description", doc)
-    end
-  end
-
-  defp extract_response_text(%ReqLLM.Response{message: %{content: content}})
-       when is_list(content) do
-    content
-    |> Enum.filter(fn part -> is_map(part) and Map.has_key?(part, :text) end)
-    |> Enum.map_join("\n", fn part -> part.text end)
-  end
-
-  defp extract_response_text(%ReqLLM.Response{message: %{content: content}})
-       when is_binary(content) do
-    content
-  end
-
-  defp extract_response_text(%ReqLLM.Response{} = response) do
-    Logger.warning("Unexpected ReqLLM response format: #{inspect(response)}")
-    ""
-  end
-
-  defp extract_response_text(response) do
-    Logger.warning("Unexpected response type: #{inspect(response)}")
-    ""
   end
 
   defp align_extractions_to_chunk(extractions, chunk) do
@@ -643,20 +564,6 @@ defmodule LeXtract.Annotator do
         base_map
       end
     end)
-  end
-
-  defp extract_response_object(%ReqLLM.Response{object: object}) when is_map(object) do
-    object
-  end
-
-  defp extract_response_object(%ReqLLM.Response{} = response) do
-    Logger.warning("Unexpected ReqLLM response format for object: #{inspect(response)}")
-    %{"extractions" => []}
-  end
-
-  defp extract_response_object(response) do
-    Logger.warning("Unexpected response type for object: #{inspect(response)}")
-    %{"extractions" => []}
   end
 
   defp parse_structured_response(object, chunk) do

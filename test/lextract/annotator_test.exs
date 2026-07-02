@@ -1,19 +1,11 @@
 defmodule LeXtract.AnnotatorTest do
-  use ExUnit.Case, async: false
-  use Mimic
+  use ExUnit.Case, async: true
   import ExUnit.CaptureLog
 
   alias LeXtract.{AnnotatedDocument, Annotator, Document}
+  alias LeXtract.LLM.Stub
 
   doctest LeXtract.Annotator
-
-  setup :set_mimic_from_context
-  setup :verify_on_exit!
-
-  setup do
-    Mimic.copy(ReqLLM)
-    :ok
-  end
 
   describe "new/3" do
     test "creates annotator with required config" do
@@ -22,73 +14,63 @@ defmodule LeXtract.AnnotatorTest do
         examples: []
       }
 
-      config = [
-        model: "gemini-2.0-flash",
-        provider: :gemini,
-        api_key: "test-key"
-      ]
+      llm_opts = [canned_text: "[]"]
 
-      annotator = Annotator.new(template, config)
+      annotator = Annotator.new(template, {Stub, llm_opts})
 
       assert is_struct(annotator, Annotator)
       assert annotator.format_handler.format == :yaml
-      assert annotator.req_llm_config == config
+      assert annotator.llm_adapter == Stub
+      assert annotator.llm_opts == llm_opts
+      assert annotator.max_concurrency == 8
     end
 
     test "accepts format options" do
       template = %{description: "Test", examples: []}
-      config = [model: "test", provider: :test, api_key: "key"]
 
-      annotator = Annotator.new(template, config, format: :json)
+      annotator = Annotator.new(template, {Stub, []}, format: :json)
 
       assert annotator.format_handler.format == :json
     end
 
     test "accepts fence_output option" do
       template = %{description: "Test", examples: []}
-      config = [model: "test", provider: :test, api_key: "key"]
 
-      annotator = Annotator.new(template, config, fence_output: true)
+      annotator = Annotator.new(template, {Stub, []}, fence_output: true)
 
       assert annotator.format_handler.fence_output == true
     end
 
     test "accepts attribute_suffix option" do
       template = %{description: "Test", examples: []}
-      config = [model: "test", provider: :test, api_key: "key"]
 
-      annotator = Annotator.new(template, config, attribute_suffix: "_attrs")
+      annotator = Annotator.new(template, {Stub, []}, attribute_suffix: "_attrs")
 
       assert annotator.format_handler.attribute_suffix == "_attrs"
+    end
+
+    test "accepts max_concurrency option" do
+      template = %{description: "Test", examples: []}
+
+      annotator = Annotator.new(template, {Stub, []}, max_concurrency: 2)
+
+      assert annotator.max_concurrency == 2
     end
   end
 
   describe "annotate_text/3" do
-    test "annotates simple text with mocked LLM" do
+    test "annotates simple text with stubbed LLM" do
       template = %{
         description: "Extract people",
         examples: []
       }
 
-      config = [model: "gemini-2.0-flash", provider: :gemini, api_key: "test"]
-      annotator = Annotator.new(template, config, format: :json)
-
       mock_llm_response = """
       [{"person": "John Doe", "person_index": 0}]
       """
 
-      ReqLLM
-      |> expect(:generate_text, fn _model, _prompt, _opts ->
-        {:ok,
-         %ReqLLM.Response{
-           message: %{content: mock_llm_response},
-           finish_reason: :stop,
-           usage: %{},
-           context: %{},
-           model: "gemini-2.0-flash",
-           id: "test-id-1"
-         }}
-      end)
+      annotator =
+        Annotator.new(template, {Stub, [canned_text: mock_llm_response]}, format: :json)
 
       doc = Annotator.annotate_text(annotator, "John Doe works here")
 
@@ -98,8 +80,7 @@ defmodule LeXtract.AnnotatorTest do
 
     test "handles empty text" do
       template = %{description: "Extract", examples: []}
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config)
+      annotator = Annotator.new(template, {Stub, [canned_text: "[]"]})
 
       doc = Annotator.annotate_text(annotator, "")
 
@@ -109,21 +90,7 @@ defmodule LeXtract.AnnotatorTest do
 
     test "handles text with no extractions" do
       template = %{description: "Extract", examples: []}
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config, format: :json)
-
-      ReqLLM
-      |> expect(:generate_text, fn _model, _prompt, _opts ->
-        {:ok,
-         %ReqLLM.Response{
-           message: %{content: "[]"},
-           finish_reason: :stop,
-           usage: %{},
-           context: %{},
-           model: "test",
-           id: "test-id"
-         }}
-      end)
+      annotator = Annotator.new(template, {Stub, [canned_text: "[]"]}, format: :json)
 
       doc = Annotator.annotate_text(annotator, "No entities here")
 
@@ -132,8 +99,6 @@ defmodule LeXtract.AnnotatorTest do
 
     test "handles LLM response with multiple extractions" do
       template = %{description: "Extract", examples: []}
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config, format: :json)
 
       mock_response = """
       [
@@ -142,18 +107,7 @@ defmodule LeXtract.AnnotatorTest do
       ]
       """
 
-      ReqLLM
-      |> expect(:generate_text, fn _model, _prompt, _opts ->
-        {:ok,
-         %ReqLLM.Response{
-           message: %{content: mock_response},
-           finish_reason: :stop,
-           usage: %{},
-           context: %{},
-           model: "test",
-           id: "test-id"
-         }}
-      end)
+      annotator = Annotator.new(template, {Stub, [canned_text: mock_response]}, format: :json)
 
       doc = Annotator.annotate_text(annotator, "John Doe and Jane Smith work together")
 
@@ -162,21 +116,9 @@ defmodule LeXtract.AnnotatorTest do
 
     test "handles malformed LLM response gracefully" do
       template = %{description: "Extract", examples: []}
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config, format: :json)
 
-      ReqLLM
-      |> expect(:generate_text, fn _model, _prompt, _opts ->
-        {:ok,
-         %ReqLLM.Response{
-           message: %{content: "{invalid json}"},
-           finish_reason: :stop,
-           usage: %{},
-           context: %{},
-           model: "test",
-           id: "test-id"
-         }}
-      end)
+      annotator =
+        Annotator.new(template, {Stub, [canned_text: "{invalid json}"]}, format: :json)
 
       capture_log(fn ->
         doc = Annotator.annotate_text(annotator, "Test text")
@@ -190,21 +132,7 @@ defmodule LeXtract.AnnotatorTest do
   describe "annotate_documents/3" do
     test "annotates multiple documents" do
       template = %{description: "Extract", examples: []}
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config, format: :json)
-
-      ReqLLM
-      |> stub(:generate_text, fn _model, _prompt, _opts ->
-        {:ok,
-         %ReqLLM.Response{
-           message: %{content: "[]"},
-           finish_reason: :stop,
-           usage: %{},
-           context: %{},
-           model: "test",
-           id: "test-id"
-         }}
-      end)
+      annotator = Annotator.new(template, {Stub, [canned_text: "[]"]}, format: :json)
 
       documents = [
         Document.create("Text 1", document_id: "doc1"),
@@ -220,21 +148,7 @@ defmodule LeXtract.AnnotatorTest do
 
     test "preserves document_id" do
       template = %{description: "Extract", examples: []}
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config, format: :json)
-
-      ReqLLM
-      |> stub(:generate_text, fn _model, _prompt, _opts ->
-        {:ok,
-         %ReqLLM.Response{
-           message: %{content: "[]"},
-           finish_reason: :stop,
-           usage: %{},
-           context: %{},
-           model: "test",
-           id: "test-id"
-         }}
-      end)
+      annotator = Annotator.new(template, {Stub, [canned_text: "[]"]}, format: :json)
 
       doc = Document.create("Test", document_id: "my-doc-id")
       [annotated] = Annotator.annotate_documents(annotator, [doc]) |> Enum.to_list()
@@ -244,21 +158,7 @@ defmodule LeXtract.AnnotatorTest do
 
     test "handles documents of varying lengths" do
       template = %{description: "Extract", examples: []}
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config, format: :json)
-
-      ReqLLM
-      |> stub(:generate_text, fn _model, _prompt, _opts ->
-        {:ok,
-         %ReqLLM.Response{
-           message: %{content: "[]"},
-           finish_reason: :stop,
-           usage: %{},
-           context: %{},
-           model: "test",
-           id: "test-id"
-         }}
-      end)
+      annotator = Annotator.new(template, {Stub, [canned_text: "[]"]}, format: :json)
 
       documents = [
         Document.create("Short"),
@@ -274,21 +174,7 @@ defmodule LeXtract.AnnotatorTest do
 
     test "supports max_char_buffer option" do
       template = %{description: "Extract", examples: []}
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config, format: :json)
-
-      ReqLLM
-      |> stub(:generate_text, fn _model, _prompt, _opts ->
-        {:ok,
-         %ReqLLM.Response{
-           message: %{content: "[]"},
-           finish_reason: :stop,
-           usage: %{},
-           context: %{},
-           model: "test",
-           id: "test-id"
-         }}
-      end)
+      annotator = Annotator.new(template, {Stub, [canned_text: "[]"]}, format: :json)
 
       long_text = String.duplicate("Word ", 500)
       doc = Document.create(long_text)
@@ -302,25 +188,14 @@ defmodule LeXtract.AnnotatorTest do
 
     test "supports batch_size option" do
       template = %{description: "Extract", examples: []}
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config, format: :json)
-
       call_count = :counters.new(1, [:atomics])
 
-      ReqLLM
-      |> stub(:generate_text, fn _model, _prompt, _opts ->
+      canned_text = fn ->
         :counters.add(call_count, 1, 1)
+        "[]"
+      end
 
-        {:ok,
-         %ReqLLM.Response{
-           message: %{content: "[]"},
-           finish_reason: :stop,
-           usage: %{},
-           context: %{},
-           model: "test",
-           id: "test-id"
-         }}
-      end)
+      annotator = Annotator.new(template, {Stub, [canned_text: canned_text]}, format: :json)
 
       documents = Enum.map(1..10, fn i -> Document.create("Text #{i}") end)
 
@@ -334,25 +209,14 @@ defmodule LeXtract.AnnotatorTest do
   describe "multi-pass extraction" do
     test "runs multiple extraction passes" do
       template = %{description: "Extract", examples: []}
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config, format: :json)
-
       call_count = :counters.new(1, [:atomics])
 
-      ReqLLM
-      |> stub(:generate_text, fn _model, _prompt, _opts ->
+      canned_text = fn ->
         :counters.add(call_count, 1, 1)
+        "[]"
+      end
 
-        {:ok,
-         %ReqLLM.Response{
-           message: %{content: "[]"},
-           finish_reason: :stop,
-           usage: %{},
-           context: %{},
-           model: "test",
-           id: "test-id"
-         }}
-      end)
+      annotator = Annotator.new(template, {Stub, [canned_text: canned_text]}, format: :json)
 
       doc = Document.create("Test text")
 
@@ -364,33 +228,20 @@ defmodule LeXtract.AnnotatorTest do
 
     test "merges non-overlapping extractions from multiple passes" do
       template = %{description: "Extract", examples: []}
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config, format: :json)
-
       pass_num = :counters.new(1, [:atomics])
 
-      ReqLLM
-      |> stub(:generate_text, fn _model, _prompt, _opts ->
+      canned_text = fn ->
         current = :counters.get(pass_num, 1)
         :counters.add(pass_num, 1, 1)
 
-        response =
-          case current do
-            0 -> ~s([{"entity": "first", "entity_index": 0}])
-            1 -> ~s([{"entity": "second", "entity_index": 1}])
-            _ -> "[]"
-          end
+        case current do
+          0 -> ~s([{"entity": "first", "entity_index": 0}])
+          1 -> ~s([{"entity": "second", "entity_index": 1}])
+          _ -> "[]"
+        end
+      end
 
-        {:ok,
-         %ReqLLM.Response{
-           message: %{content: response},
-           finish_reason: :stop,
-           usage: %{},
-           context: %{},
-           model: "test",
-           id: "test-id"
-         }}
-      end)
+      annotator = Annotator.new(template, {Stub, [canned_text: canned_text]}, format: :json)
 
       doc = Document.create("Test first second")
 
@@ -405,13 +256,7 @@ defmodule LeXtract.AnnotatorTest do
   describe "error handling" do
     test "handles LLM inference errors gracefully" do
       template = %{description: "Extract", examples: []}
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config)
-
-      ReqLLM
-      |> expect(:generate_text, fn _model, _prompt, _opts ->
-        {:error, :network_error}
-      end)
+      annotator = Annotator.new(template, {Stub, [error: :network_error]})
 
       capture_log(fn ->
         doc = Annotator.annotate_text(annotator, "Test")
@@ -423,21 +268,13 @@ defmodule LeXtract.AnnotatorTest do
 
     test "handles alignment failures gracefully" do
       template = %{description: "Extract", examples: []}
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config, format: :json)
 
-      ReqLLM
-      |> expect(:generate_text, fn _model, _prompt, _opts ->
-        {:ok,
-         %ReqLLM.Response{
-           message: %{content: ~s([{"entity": "nonexistent"}])},
-           finish_reason: :stop,
-           usage: %{},
-           context: %{},
-           model: "test",
-           id: "test-id"
-         }}
-      end)
+      annotator =
+        Annotator.new(
+          template,
+          {Stub, [canned_text: ~s([{"entity": "nonexistent"}])]},
+          format: :json
+        )
 
       doc = Annotator.annotate_text(annotator, "Different text")
 
@@ -446,26 +283,13 @@ defmodule LeXtract.AnnotatorTest do
 
     test "handles YAML format responses" do
       template = %{description: "Extract", examples: []}
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config, format: :yaml)
 
       yaml_response = """
       - entity: test
         entity_index: 0
       """
 
-      ReqLLM
-      |> expect(:generate_text, fn _model, _prompt, _opts ->
-        {:ok,
-         %ReqLLM.Response{
-           message: %{content: yaml_response},
-           finish_reason: :stop,
-           usage: %{},
-           context: %{},
-           model: "test",
-           id: "test-id"
-         }}
-      end)
+      annotator = Annotator.new(template, {Stub, [canned_text: yaml_response]}, format: :yaml)
 
       doc = Annotator.annotate_text(annotator, "Test entity here")
 
@@ -476,21 +300,7 @@ defmodule LeXtract.AnnotatorTest do
   describe "chunking and alignment" do
     test "handles long text with chunking" do
       template = %{description: "Extract", examples: []}
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config, format: :json)
-
-      ReqLLM
-      |> stub(:generate_text, fn _model, _prompt, _opts ->
-        {:ok,
-         %ReqLLM.Response{
-           message: %{content: "[]"},
-           finish_reason: :stop,
-           usage: %{},
-           context: %{},
-           model: "test",
-           id: "test-id"
-         }}
-      end)
+      annotator = Annotator.new(template, {Stub, [canned_text: "[]"]}, format: :json)
 
       long_text = String.duplicate("This is a test sentence. ", 100)
       doc = Annotator.annotate_text(annotator, long_text, max_char_buffer: 200)
@@ -500,21 +310,13 @@ defmodule LeXtract.AnnotatorTest do
 
     test "aligns extractions to correct positions in source text" do
       template = %{description: "Extract", examples: []}
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config, format: :json)
 
-      ReqLLM
-      |> expect(:generate_text, fn _model, _prompt, _opts ->
-        {:ok,
-         %ReqLLM.Response{
-           message: %{content: ~s([{"person": "John", "person_index": 0}])},
-           finish_reason: :stop,
-           usage: %{},
-           context: %{},
-           model: "test",
-           id: "test-id"
-         }}
-      end)
+      annotator =
+        Annotator.new(
+          template,
+          {Stub, [canned_text: ~s([{"person": "John", "person_index": 0}])]},
+          format: :json
+        )
 
       doc = Annotator.annotate_text(annotator, "Hello John Doe")
 
@@ -542,16 +344,14 @@ defmodule LeXtract.AnnotatorTest do
         ]
       }
 
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config, use_structured_output: true)
+      annotator = Annotator.new(template, {Stub, []}, use_structured_output: true)
 
       assert annotator.use_structured_output == true
     end
 
     test "defaults to text generation mode" do
       template = %{description: "Extract", examples: []}
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config)
+      annotator = Annotator.new(template, {Stub, []})
 
       assert annotator.use_structured_output == false
     end
@@ -573,9 +373,6 @@ defmodule LeXtract.AnnotatorTest do
         ]
       }
 
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config, use_structured_output: true)
-
       mock_object = %{
         "extractions" => [
           %{
@@ -588,19 +385,8 @@ defmodule LeXtract.AnnotatorTest do
         ]
       }
 
-      ReqLLM
-      |> expect(:generate_object, fn _model, _prompt, _schema, _opts ->
-        {:ok,
-         %ReqLLM.Response{
-           message: %{content: "", role: :assistant},
-           object: mock_object,
-           finish_reason: :stop,
-           usage: %{},
-           context: %{},
-           model: "test",
-           id: "test-id"
-         }}
-      end)
+      annotator =
+        Annotator.new(template, {Stub, [canned_object: mock_object]}, use_structured_output: true)
 
       doc = Annotator.annotate_text(annotator, "Patient takes aspirin 100mg daily")
 
@@ -619,13 +405,8 @@ defmodule LeXtract.AnnotatorTest do
         ]
       }
 
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config, use_structured_output: true)
-
-      ReqLLM
-      |> expect(:generate_object, fn _model, _prompt, _schema, _opts ->
-        {:error, :network_error}
-      end)
+      annotator =
+        Annotator.new(template, {Stub, [error: :network_error]}, use_structured_output: true)
 
       capture_log(fn ->
         doc = Annotator.annotate_text(annotator, "Test text")
@@ -649,9 +430,6 @@ defmodule LeXtract.AnnotatorTest do
         ]
       }
 
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config, use_structured_output: true)
-
       mock_object = %{
         "extractions" => [
           %{
@@ -665,19 +443,8 @@ defmodule LeXtract.AnnotatorTest do
         ]
       }
 
-      ReqLLM
-      |> expect(:generate_object, fn _model, _prompt, _schema, _opts ->
-        {:ok,
-         %ReqLLM.Response{
-           message: %{content: "", role: :assistant},
-           object: mock_object,
-           finish_reason: :stop,
-           usage: %{},
-           context: %{},
-           model: "test",
-           id: "test-id"
-         }}
-      end)
+      annotator =
+        Annotator.new(template, {Stub, [canned_object: mock_object]}, use_structured_output: true)
 
       doc = Annotator.annotate_text(annotator, "Dr. Smith prescribed aspirin to patient")
 
@@ -696,24 +463,10 @@ defmodule LeXtract.AnnotatorTest do
         ]
       }
 
-      config = [model: "test", provider: :test, api_key: "key"]
-      annotator = Annotator.new(template, config, use_structured_output: true)
-
       mock_object = %{"extractions" => []}
 
-      ReqLLM
-      |> expect(:generate_object, fn _model, _prompt, _schema, _opts ->
-        {:ok,
-         %ReqLLM.Response{
-           message: %{content: "", role: :assistant},
-           object: mock_object,
-           finish_reason: :stop,
-           usage: %{},
-           context: %{},
-           model: "test",
-           id: "test-id"
-         }}
-      end)
+      annotator =
+        Annotator.new(template, {Stub, [canned_object: mock_object]}, use_structured_output: true)
 
       doc = Annotator.annotate_text(annotator, "No medications here")
 

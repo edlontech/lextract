@@ -4,24 +4,15 @@ defmodule LeXtract.Config do
 
   ## Examples
 
-      iex> config = LeXtract.Config.new(model: "gpt-4", provider: :openai, prompt: "test", max_char_buffer: 2000)
-      iex> config.model
-      "gpt-4"
+      iex> config = LeXtract.Config.new(prompt: "test", max_char_buffer: 2000)
+      iex> config.max_char_buffer
+      2000
 
       iex> config = LeXtract.Config.default()
       iex> config.batch_size
       5
 
   """
-
-  @doc false
-  def validate_temperature(value) do
-    cond do
-      is_nil(value) -> {:ok, value}
-      is_float(value) and value >= 0.0 and value <= 1.0 -> {:ok, value}
-      true -> {:error, "must be a float between 0.0 and 1.0, got: #{inspect(value)}"}
-    end
-  end
 
   @options_schema NimbleOptions.new!(
                     prompt: [
@@ -36,21 +27,6 @@ defmodule LeXtract.Config do
                     template_file: [
                       type: :string,
                       doc: "Path to template file (.json or .yaml)"
-                    ],
-                    model: [
-                      type: :string,
-                      required: true,
-                      doc: "LLM model identifier (e.g., 'gpt-4o-mini', 'gemini-2.5-flash')"
-                    ],
-                    provider: [
-                      type: :atom,
-                      required: true,
-                      doc: "LLM provider (:openai, :gemini, :anthropic, etc.)"
-                    ],
-                    api_key: [
-                      type: :string,
-                      required: false,
-                      doc: "API key for the LLM provider"
                     ],
                     format: [
                       type: {:in, [:json, :yaml]},
@@ -92,22 +68,6 @@ defmodule LeXtract.Config do
                       default: 8,
                       doc: "Maximum concurrent LLM requests"
                     ],
-                    temperature: [
-                      type: {:custom, __MODULE__, :validate_temperature, []},
-                      default: 0.2,
-                      doc: "LLM sampling temperature (0.0-1.0)",
-                      type_spec: quote(do: float() | nil)
-                    ],
-                    max_tokens: [
-                      type: :pos_integer,
-                      default: 4096,
-                      doc: "Maximum tokens in LLM response"
-                    ],
-                    timeout: [
-                      type: :pos_integer,
-                      default: 60_000,
-                      doc: "Request timeout in milliseconds"
-                    ],
                     attribute_suffix: [
                       type: :string,
                       default: "_attributes",
@@ -124,9 +84,6 @@ defmodule LeXtract.Config do
           prompt: String.t() | nil,
           examples: [map()],
           template_file: String.t() | nil,
-          model: String.t() | nil,
-          provider: atom() | nil,
-          api_key: String.t() | nil,
           format: :json | :yaml,
           fence_output: boolean(),
           use_structured_output: boolean(),
@@ -135,18 +92,12 @@ defmodule LeXtract.Config do
           batch_size: pos_integer(),
           extraction_passes: pos_integer(),
           max_concurrency: pos_integer(),
-          temperature: float() | nil,
-          max_tokens: pos_integer() | nil,
-          timeout: pos_integer(),
           attribute_suffix: String.t()
         }
 
   defstruct prompt: nil,
             examples: [],
             template_file: nil,
-            model: nil,
-            provider: nil,
-            api_key: nil,
             format: :yaml,
             fence_output: false,
             use_structured_output: false,
@@ -155,9 +106,6 @@ defmodule LeXtract.Config do
             batch_size: 5,
             extraction_passes: 1,
             max_concurrency: 8,
-            temperature: 0.2,
-            max_tokens: 4096,
-            timeout: 60_000,
             attribute_suffix: "_attributes"
 
   @doc """
@@ -180,17 +128,14 @@ defmodule LeXtract.Config do
 
   ## Examples
 
-      iex> config = LeXtract.Config.new(model: "gpt-4", provider: :openai, prompt: "test", max_char_buffer: 2000)
-      iex> config.model
-      "gpt-4"
+      iex> config = LeXtract.Config.new(prompt: "test", max_char_buffer: 2000)
+      iex> config.max_char_buffer
+      2000
 
-      iex> LeXtract.Config.new(model: "gpt-4", provider: :openai, prompt: "test", max_char_buffer: -1)
+      iex> LeXtract.Config.new(prompt: "test", max_char_buffer: -1)
       ** (NimbleOptions.ValidationError) invalid value for :max_char_buffer option: expected positive integer, got: -1
 
-      iex> LeXtract.Config.new(model: "gpt-4", provider: :openai, prompt: "test", temperature: 1.5)
-      ** (NimbleOptions.ValidationError) invalid value for :temperature option: must be a float between 0.0 and 1.0, got: 1.5
-
-      iex> LeXtract.Config.new(model: "gpt-4", provider: :openai, prompt: "test", format: :xml)
+      iex> LeXtract.Config.new(prompt: "test", format: :xml)
       ** (NimbleOptions.ValidationError) invalid value for :format option: expected one of [:json, :yaml], got: :xml
 
   """
@@ -209,11 +154,11 @@ defmodule LeXtract.Config do
 
   ## Examples
 
-      iex> {:ok, config} = LeXtract.Config.from_keyword(model: "gpt-4", provider: :openai, prompt: "test")
-      iex> config.model
-      "gpt-4"
+      iex> {:ok, config} = LeXtract.Config.from_keyword(prompt: "test")
+      iex> config.prompt
+      "test"
 
-      iex> {:error, _} = LeXtract.Config.from_keyword(model: "gpt-4")
+      iex> {:error, _} = LeXtract.Config.from_keyword([])
 
   """
   @spec from_keyword(keyword()) :: {:ok, t()} | {:error, Exception.t()}
@@ -226,9 +171,9 @@ defmodule LeXtract.Config do
 
   ## Examples
 
-      iex> config = LeXtract.Config.from_keyword!(model: "gpt-4", provider: :openai, prompt: "test")
-      iex> config.model
-      "gpt-4"
+      iex> config = LeXtract.Config.from_keyword!(prompt: "test")
+      iex> config.prompt
+      "test"
 
   """
   @spec from_keyword!(keyword()) :: t()
@@ -246,16 +191,16 @@ defmodule LeXtract.Config do
 
   ## Examples
 
-      iex> {:ok, config} = LeXtract.Config.validate(max_char_buffer: 1000, model: "gpt-4", provider: :openai, prompt: "test")
+      iex> {:ok, config} = LeXtract.Config.validate(max_char_buffer: 1000, prompt: "test")
       iex> config.max_char_buffer
       1000
 
-      iex> {:error, error} = LeXtract.Config.validate(max_char_buffer: -1, model: "gpt-4", provider: :openai, prompt: "test")
+      iex> {:error, error} = LeXtract.Config.validate(max_char_buffer: -1, prompt: "test")
       iex> String.contains?(Exception.message(error), "expected positive integer")
       true
 
-      iex> {:error, error} = LeXtract.Config.validate(temperature: 1.5, model: "gpt-4", provider: :openai, prompt: "test")
-      iex> String.contains?(Exception.message(error), "must be a float between 0.0 and 1.0")
+      iex> {:error, error} = LeXtract.Config.validate(format: :xml, prompt: "test")
+      iex> String.contains?(Exception.message(error), "expected one of")
       true
 
   """
@@ -334,10 +279,10 @@ defmodule LeXtract.Config do
 
   ## Examples
 
-      iex> LeXtract.Config.validate!(max_char_buffer: 1000, model: "gpt-4", provider: :openai, prompt: "test")
-      %LeXtract.Config{max_char_buffer: 1000, model: "gpt-4", provider: :openai, prompt: "test"}
+      iex> LeXtract.Config.validate!(max_char_buffer: 1000, prompt: "test")
+      %LeXtract.Config{max_char_buffer: 1000, prompt: "test"}
 
-      iex> LeXtract.Config.validate!(max_char_buffer: -1, model: "gpt-4", provider: :openai)
+      iex> LeXtract.Config.validate!(max_char_buffer: -1, prompt: "test")
       ** (LeXtract.Error.Invalid.Config) Configuration validation failed: invalid value for :max_char_buffer option: expected positive integer, got: -1
 
   """
@@ -356,10 +301,10 @@ defmodule LeXtract.Config do
 
   ## Examples
 
-      iex> config = LeXtract.Config.new(model: "gpt-4", provider: :openai, prompt: "test")
+      iex> config = LeXtract.Config.new(prompt: "test")
       iex> kw = LeXtract.Config.to_keyword(config)
-      iex> Keyword.get(kw, :model)
-      "gpt-4"
+      iex> Keyword.get(kw, :prompt)
+      "test"
 
   """
   @spec to_keyword(t()) :: keyword()

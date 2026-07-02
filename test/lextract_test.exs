@@ -16,28 +16,14 @@ defmodule LeXtractTest do
 
   describe "validate_options/1" do
     test "validates correct minimal options" do
-      {:ok, validated} =
-        LeXtract.validate_options(
-          prompt: "Extract entities",
-          model: "gpt-4o-mini",
-          provider: :openai,
-          api_key: "test-key"
-        )
+      {:ok, validated} = LeXtract.validate_options(prompt: "Extract entities")
 
       assert Keyword.get(validated, :prompt) == "Extract entities"
-      assert Keyword.get(validated, :model) == "gpt-4o-mini"
-      assert Keyword.get(validated, :provider) == :openai
       assert Keyword.get(validated, :format) == :yaml
     end
 
     test "validates template_file option" do
-      {:ok, validated} =
-        LeXtract.validate_options(
-          template_file: "/tmp/template.yaml",
-          model: "gpt-4o-mini",
-          provider: :openai,
-          api_key: "test-key"
-        )
+      {:ok, validated} = LeXtract.validate_options(template_file: "/tmp/template.yaml")
 
       assert Keyword.get(validated, :template_file) == "/tmp/template.yaml"
     end
@@ -46,12 +32,6 @@ defmodule LeXtractTest do
       {:ok, validated} =
         LeXtract.validate_options(
           prompt: "Extract",
-          model: "gpt-4o-mini",
-          provider: :openai,
-          api_key: "key",
-          temperature: 0.5,
-          max_tokens: 1000,
-          timeout: 30_000,
           format: :json,
           fence_output: true,
           use_structured_output: true,
@@ -63,9 +43,6 @@ defmodule LeXtractTest do
           attribute_suffix: "_attrs"
         )
 
-      assert Keyword.get(validated, :temperature) == 0.5
-      assert Keyword.get(validated, :max_tokens) == 1000
-      assert Keyword.get(validated, :timeout) == 30_000
       assert Keyword.get(validated, :format) == :json
       assert Keyword.get(validated, :fence_output) == true
       assert Keyword.get(validated, :use_structured_output) == true
@@ -77,101 +54,41 @@ defmodule LeXtractTest do
       assert Keyword.get(validated, :attribute_suffix) == "_attrs"
     end
 
-    test "returns error for missing required model" do
+    test "returns error for model and provider since they are adapter opts, not core opts" do
       {:error, error} =
-        LeXtract.validate_options(
-          prompt: "Extract",
-          provider: :openai,
-          api_key: "key"
-        )
+        LeXtract.validate_options(prompt: "Extract", model: "gpt-4o-mini", provider: :openai)
 
-      assert Exception.message(error) =~ "required"
-      assert Exception.message(error) =~ "model"
-    end
-
-    test "returns error for missing required provider" do
-      {:error, error} =
-        LeXtract.validate_options(
-          prompt: "Extract",
-          model: "gpt-4o-mini",
-          api_key: "key"
-        )
-
-      assert Exception.message(error) =~ "required"
-      assert Exception.message(error) =~ "provider"
-    end
-
-    test "returns error for invalid temperature type" do
-      {:error, error} =
-        LeXtract.validate_options(
-          prompt: "Extract",
-          model: "gpt-4o-mini",
-          provider: :openai,
-          api_key: "key",
-          temperature: "invalid"
-        )
-
-      assert Exception.message(error) =~ "temperature"
+      assert Exception.message(error) =~ "unknown options"
     end
 
     test "returns error for invalid format" do
-      {:error, error} =
-        LeXtract.validate_options(
-          prompt: "Extract",
-          model: "gpt-4o-mini",
-          provider: :openai,
-          api_key: "key",
-          format: :xml
-        )
+      {:error, error} = LeXtract.validate_options(prompt: "Extract", format: :xml)
 
       assert Exception.message(error) =~ "format"
     end
 
     test "returns error for invalid max_char_buffer" do
-      {:error, error} =
-        LeXtract.validate_options(
-          prompt: "Extract",
-          model: "gpt-4o-mini",
-          provider: :openai,
-          api_key: "key",
-          max_char_buffer: -1
-        )
+      {:error, error} = LeXtract.validate_options(prompt: "Extract", max_char_buffer: -1)
 
       assert Exception.message(error) =~ "max_char_buffer"
     end
 
     test "returns error when both inline and file templates specified" do
       {:error, error} =
-        LeXtract.validate_options(
-          prompt: "Extract",
-          template_file: "/tmp/template.yaml",
-          model: "gpt-4o-mini",
-          provider: :openai,
-          api_key: "key"
-        )
+        LeXtract.validate_options(prompt: "Extract", template_file: "/tmp/template.yaml")
 
       assert Exception.message(error) =~ "Cannot specify both"
     end
 
     test "returns error when no template specified" do
-      {:error, error} =
-        LeXtract.validate_options(
-          model: "gpt-4o-mini",
-          provider: :openai,
-          api_key: "key"
-        )
+      {:error, error} = LeXtract.validate_options([])
 
       assert Exception.message(error) =~ "Must specify either"
     end
 
     test "returns error when only examples specified without prompt" do
       {:error, error} =
-        LeXtract.validate_options(
-          examples: [%{text: "test", extractions: []}],
-          model: "gpt-4o-mini",
-          provider: :openai,
-          api_key: "key"
-        )
+        LeXtract.validate_options(examples: [%{text: "test", extractions: []}])
 
       assert Exception.message(error) =~ "prompt is required"
     end
@@ -187,7 +104,9 @@ defmodule LeXtractTest do
             format_handler: LeXtract.FormatHandler.new(:yaml)
           },
           format_handler: LeXtract.FormatHandler.new(:yaml),
-          req_llm_config: [],
+          llm_adapter: LeXtract.LLM.ReqLLM,
+          llm_opts: [],
+          max_concurrency: 8,
           use_structured_output: false
         }
       end)
@@ -227,7 +146,9 @@ defmodule LeXtractTest do
             format_handler: LeXtract.FormatHandler.new(:yaml)
           },
           format_handler: LeXtract.FormatHandler.new(:yaml),
-          req_llm_config: [],
+          llm_adapter: LeXtract.LLM.ReqLLM,
+          llm_opts: [],
+          max_concurrency: 8,
           use_structured_output: false
         }
       end)
@@ -265,7 +186,9 @@ defmodule LeXtractTest do
             format_handler: LeXtract.FormatHandler.new(:yaml)
           },
           format_handler: LeXtract.FormatHandler.new(:yaml),
-          req_llm_config: [],
+          llm_adapter: LeXtract.LLM.ReqLLM,
+          llm_opts: [],
+          max_concurrency: 8,
           use_structured_output: false
         }
       end)
@@ -306,7 +229,9 @@ defmodule LeXtractTest do
             format_handler: LeXtract.FormatHandler.new(:yaml)
           },
           format_handler: LeXtract.FormatHandler.new(:yaml),
-          req_llm_config: [],
+          llm_adapter: LeXtract.LLM.ReqLLM,
+          llm_opts: [],
+          max_concurrency: 8,
           use_structured_output: false
         }
       end)
@@ -358,7 +283,9 @@ defmodule LeXtractTest do
             format_handler: LeXtract.FormatHandler.new(:yaml)
           },
           format_handler: LeXtract.FormatHandler.new(:yaml),
-          req_llm_config: [],
+          llm_adapter: LeXtract.LLM.ReqLLM,
+          llm_opts: [],
+          max_concurrency: 8,
           use_structured_output: false
         }
       end)
@@ -407,7 +334,9 @@ defmodule LeXtractTest do
             format_handler: LeXtract.FormatHandler.new(:yaml)
           },
           format_handler: LeXtract.FormatHandler.new(:yaml),
-          req_llm_config: [],
+          llm_adapter: LeXtract.LLM.ReqLLM,
+          llm_opts: [],
+          max_concurrency: 8,
           use_structured_output: false
         }
       end)
@@ -460,7 +389,9 @@ defmodule LeXtractTest do
             format_handler: LeXtract.FormatHandler.new(:yaml)
           },
           format_handler: LeXtract.FormatHandler.new(:yaml),
-          req_llm_config: [],
+          llm_adapter: LeXtract.LLM.ReqLLM,
+          llm_opts: [],
+          max_concurrency: 8,
           use_structured_output: false
         }
       end)
@@ -527,7 +458,9 @@ defmodule LeXtractTest do
             format_handler: LeXtract.FormatHandler.new(:yaml)
           },
           format_handler: LeXtract.FormatHandler.new(:yaml),
-          req_llm_config: [],
+          llm_adapter: LeXtract.LLM.ReqLLM,
+          llm_opts: [],
+          max_concurrency: 8,
           use_structured_output: false
         }
       end)
@@ -584,7 +517,9 @@ defmodule LeXtractTest do
             format_handler: LeXtract.FormatHandler.new(:yaml)
           },
           format_handler: LeXtract.FormatHandler.new(:yaml),
-          req_llm_config: [],
+          llm_adapter: LeXtract.LLM.ReqLLM,
+          llm_opts: [],
+          max_concurrency: 8,
           use_structured_output: false
         }
       end)
@@ -615,12 +550,15 @@ defmodule LeXtractTest do
       assert length(results) == 2
     end
 
-    test "builds req_llm_config with all optional parameters" do
+    test "builds llm_opts with all optional parameters" do
       Annotator
-      |> stub(:new, fn _template, config, _opts ->
-        assert Keyword.get(config, :temperature) == 0.7
-        assert Keyword.get(config, :max_tokens) == 2000
-        assert Keyword.get(config, :receive_timeout) == 90_000
+      |> stub(:new, fn _template, {adapter, llm_opts}, _opts ->
+        assert adapter == LeXtract.LLM.ReqLLM
+        assert Keyword.get(llm_opts, :provider) == :openai
+        assert Keyword.get(llm_opts, :model) == "gpt-4o-mini"
+        assert Keyword.get(llm_opts, :temperature) == 0.7
+        assert Keyword.get(llm_opts, :max_tokens) == 2000
+        assert Keyword.get(llm_opts, :timeout) == 90_000
 
         %Annotator{
           prompt_generator: %LeXtract.Prompting{
@@ -628,7 +566,9 @@ defmodule LeXtractTest do
             format_handler: LeXtract.FormatHandler.new(:yaml)
           },
           format_handler: LeXtract.FormatHandler.new(:yaml),
-          req_llm_config: config,
+          llm_adapter: adapter,
+          llm_opts: llm_opts,
+          max_concurrency: 8,
           use_structured_output: false
         }
       end)
@@ -675,7 +615,9 @@ defmodule LeXtractTest do
             format_handler: LeXtract.FormatHandler.new(:yaml)
           },
           format_handler: LeXtract.FormatHandler.new(:yaml),
-          req_llm_config: [],
+          llm_adapter: LeXtract.LLM.ReqLLM,
+          llm_opts: [],
+          max_concurrency: 8,
           use_structured_output: false
         }
       end)
@@ -721,7 +663,9 @@ defmodule LeXtractTest do
             format_handler: LeXtract.FormatHandler.new(:yaml)
           },
           format_handler: LeXtract.FormatHandler.new(:yaml),
-          req_llm_config: [],
+          llm_adapter: LeXtract.LLM.ReqLLM,
+          llm_opts: [],
+          max_concurrency: 8,
           use_structured_output: false
         }
       end)
@@ -764,7 +708,9 @@ defmodule LeXtractTest do
             format_handler: LeXtract.FormatHandler.new(:yaml)
           },
           format_handler: LeXtract.FormatHandler.new(:yaml),
-          req_llm_config: [],
+          llm_adapter: LeXtract.LLM.ReqLLM,
+          llm_opts: [],
+          max_concurrency: 8,
           use_structured_output: false
         }
       end)
@@ -806,7 +752,9 @@ defmodule LeXtractTest do
             format_handler: LeXtract.FormatHandler.new(:yaml)
           },
           format_handler: LeXtract.FormatHandler.new(:yaml),
-          req_llm_config: [],
+          llm_adapter: LeXtract.LLM.ReqLLM,
+          llm_opts: [],
+          max_concurrency: 8,
           use_structured_output: false
         }
       end)
@@ -831,6 +779,151 @@ defmodule LeXtractTest do
           provider: :openai,
           api_key: "test-key"
         )
+    end
+  end
+
+  describe "llm adapter resolution" do
+    test "legacy provider/model shim resolves to LeXtract.LLM.ReqLLM" do
+      Annotator
+      |> stub(:new, fn _template, {adapter, adapter_opts}, _opts ->
+        assert adapter == LeXtract.LLM.ReqLLM
+        assert Keyword.get(adapter_opts, :provider) == :openai
+        assert Keyword.get(adapter_opts, :model) == "gpt-4o-mini"
+
+        %Annotator{
+          prompt_generator: %LeXtract.Prompting{
+            template: %{description: "test", examples: []},
+            format_handler: LeXtract.FormatHandler.new(:yaml)
+          },
+          format_handler: LeXtract.FormatHandler.new(:yaml),
+          llm_adapter: adapter,
+          llm_opts: adapter_opts,
+          max_concurrency: 8,
+          use_structured_output: false
+        }
+      end)
+
+      Annotator
+      |> stub(:annotate_documents, fn _annotator, documents, _opts ->
+        Stream.map(documents, fn doc ->
+          AnnotatedDocument.new(text: doc.text, document_id: doc.document_id, extractions: [])
+        end)
+      end)
+
+      assert {:ok, stream} =
+               LeXtract.extract(
+                 "Test",
+                 prompt: "Extract",
+                 provider: :openai,
+                 model: "gpt-4o-mini",
+                 api_key: "test-key"
+               )
+
+      assert length(Enum.to_list(stream)) == 1
+    end
+
+    test "explicit :llm opt overrides the shim and is used directly" do
+      assert {:ok, stream} =
+               LeXtract.extract(
+                 "Test text",
+                 prompt: "Extract",
+                 llm: {LeXtract.LLM.Stub, canned_text: "extractions: []\n"}
+               )
+
+      [doc] = Enum.to_list(stream)
+      assert doc.text == "Test text"
+      assert doc.extractions == []
+    end
+
+    test "explicit :llm opt wins even when legacy provider/model keys are also present" do
+      Annotator
+      |> stub(:new, fn _template, {adapter, adapter_opts}, _opts ->
+        assert adapter == LeXtract.LLM.Stub
+        refute Keyword.has_key?(adapter_opts, :provider)
+        refute Keyword.has_key?(adapter_opts, :model)
+
+        %Annotator{
+          prompt_generator: %LeXtract.Prompting{
+            template: %{description: "test", examples: []},
+            format_handler: LeXtract.FormatHandler.new(:yaml)
+          },
+          format_handler: LeXtract.FormatHandler.new(:yaml),
+          llm_adapter: adapter,
+          llm_opts: adapter_opts,
+          max_concurrency: 8,
+          use_structured_output: false
+        }
+      end)
+
+      Annotator
+      |> stub(:annotate_documents, fn _annotator, documents, _opts ->
+        Stream.map(documents, fn doc ->
+          AnnotatedDocument.new(text: doc.text, document_id: doc.document_id, extractions: [])
+        end)
+      end)
+
+      assert {:ok, _stream} =
+               LeXtract.extract(
+                 "Test",
+                 prompt: "Extract",
+                 provider: :openai,
+                 model: "gpt-4o-mini",
+                 llm: {LeXtract.LLM.Stub, canned_text: "extractions: []\n"}
+               )
+    end
+
+    test "application config default is consulted when no :llm opt is given" do
+      Application.put_env(:lextract, :llm, {LeXtract.LLM.Stub, canned_text: "extractions: []\n"})
+      on_exit(fn -> Application.delete_env(:lextract, :llm) end)
+
+      assert {:ok, stream} = LeXtract.extract("Test text", prompt: "Extract")
+
+      [doc] = Enum.to_list(stream)
+      assert doc.text == "Test text"
+      assert doc.extractions == []
+    end
+
+    test "falls back to LeXtract.LLM.ReqLLM when no app config and no :llm opt" do
+      Application.delete_env(:lextract, :llm)
+
+      Annotator
+      |> stub(:new, fn _template, {adapter, _adapter_opts}, _opts ->
+        assert adapter == LeXtract.LLM.ReqLLM
+
+        %Annotator{
+          prompt_generator: %LeXtract.Prompting{
+            template: %{description: "test", examples: []},
+            format_handler: LeXtract.FormatHandler.new(:yaml)
+          },
+          format_handler: LeXtract.FormatHandler.new(:yaml),
+          llm_adapter: adapter,
+          llm_opts: [],
+          max_concurrency: 8,
+          use_structured_output: false
+        }
+      end)
+
+      Annotator
+      |> stub(:annotate_documents, fn _annotator, documents, _opts ->
+        Stream.map(documents, fn doc ->
+          AnnotatedDocument.new(text: doc.text, document_id: doc.document_id, extractions: [])
+        end)
+      end)
+
+      assert {:ok, _stream} =
+               LeXtract.extract(
+                 "Test",
+                 prompt: "Extract",
+                 provider: :openai,
+                 model: "gpt-4o-mini"
+               )
+    end
+
+    test "adapter validate_opts/1 error surfaces from extract/2" do
+      assert {:error, error} =
+               LeXtract.extract("Test", prompt: "Extract", llm: LeXtract.LLM.ReqLLM)
+
+      assert %LeXtract.Error.Invalid.Config{} = error
     end
   end
 end

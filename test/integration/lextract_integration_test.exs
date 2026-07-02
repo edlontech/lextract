@@ -268,12 +268,11 @@ defmodule LeXtract.IntegrationTest do
         LeXtract.extract(
           "Sample text",
           prompt: "Extract entities",
-          model: "gpt-4o-mini",
           provider: :openai
         )
 
       assert {:error, error} = result
-      assert Exception.message(error) =~ "api_key"
+      assert Exception.message(error) =~ "model"
     end
 
     @tag :openai
@@ -472,46 +471,35 @@ defmodule LeXtract.IntegrationTest do
       {:ok, validated} =
         LeXtract.validate_options(
           prompt: "Extract entities",
-          model: "gpt-4o-mini",
-          provider: :openai,
-          api_key: "test-key"
+          max_char_buffer: 2000
         )
 
       assert Keyword.get(validated, :prompt) == "Extract entities"
-      assert Keyword.get(validated, :model) == "gpt-4o-mini"
-      assert Keyword.get(validated, :provider) == :openai
-      assert Keyword.get(validated, :api_key) == "test-key"
       assert Keyword.get(validated, :format) == :yaml
-      assert Keyword.get(validated, :max_char_buffer) == 1000
+      assert Keyword.get(validated, :max_char_buffer) == 2000
     end
 
-    test "returns error for missing required fields" do
+    test "returns error when no template configuration is provided" do
       {:error, error} =
-        LeXtract.validate_options(prompt: "Extract")
+        LeXtract.validate_options([])
 
-      assert Exception.message(error) =~ "required"
+      assert Exception.message(error) =~ "template"
     end
 
     test "returns error for invalid types" do
       {:error, error} =
         LeXtract.validate_options(
           prompt: "Extract",
-          model: "gpt-4o-mini",
-          provider: :openai,
-          api_key: "key",
-          temperature: "invalid"
+          max_char_buffer: "invalid"
         )
 
-      assert Exception.message(error) =~ "temperature"
+      assert Exception.message(error) =~ "max_char_buffer"
     end
 
     test "returns error for invalid format" do
       {:error, error} =
         LeXtract.validate_options(
           prompt: "Extract",
-          model: "gpt-4o-mini",
-          provider: :openai,
-          api_key: "key",
           format: :xml
         )
 

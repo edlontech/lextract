@@ -53,7 +53,7 @@ defmodule LeXtract.MixProject do
       {:mimic, "~> 2.0", only: :test},
       {:mix_audit, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:nimble_options, "~> 1.1"},
-      {:req_llm, "~> 1.0"},
+      {:req_llm, "~> 1.0", optional: true},
       {:splode, "~> 0.2"},
       {:text_chunker, "~> 0.5"},
       {:tokenizers, "~> 0.5"},

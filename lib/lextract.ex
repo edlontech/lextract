@@ -4,6 +4,9 @@ defmodule LeXtract do
 
   alias LeXtract.{Annotator, Config, Document, Prompting}
 
+  @legacy_llm_keys [:provider, :model, :api_key, :temperature, :max_tokens, :timeout]
+  @default_llm {LeXtract.LLM.ReqLLM, []}
+
   @doc """
   Extracts structured information from text using LLMs.
 
@@ -14,6 +17,19 @@ defmodule LeXtract do
 
   - `input` - Text to extract from (String.t(), [String.t()], or [Document.t()])
   - `opts` - Extraction options (see module documentation for full list)
+
+  ## LLM adapter selection
+
+  The LLM backend is a pluggable `LeXtract.LLM` adapter, resolved in this order:
+
+  1. Per-call `:llm` option — `Module` or `{Module, adapter_opts}`.
+  2. `Application.get_env(:lextract, :llm)`, e.g.
+     `config :lextract, :llm, {LeXtract.LLM.ReqLLM, provider: :openai, model: "gpt-4o-mini"}`.
+  3. Default `{LeXtract.LLM.ReqLLM, []}`.
+
+  Legacy top-level `provider:`/`model:`/`api_key:`/`temperature:`/`max_tokens:`/`timeout:`
+  options are still accepted and folded into the resolved adapter's opts when no explicit
+  `:llm` option is given, so existing calls keep working unchanged.
 
   ## Returns
 
@@ -35,10 +51,15 @@ defmodule LeXtract do
           options :: Config.options()
         ) :: {:ok, Enumerable.t(LeXtract.AnnotatedDocument.t())} | {:error, Exception.t()}
   def extract(input, opts) when is_list(opts) do
-    with {:ok, validated_opts} <- validate_options(opts),
+    {adapter_module, adapter_opts, core_opts} = resolve_llm(opts)
+
+    with {:ok, validated_core} <- Config.validate(core_opts),
+         {:ok, validated_adapter_opts} <- validate_adapter_opts(adapter_module, adapter_opts),
+         validated_opts = Config.to_keyword(validated_core),
          {:ok, template} <- build_template(validated_opts),
          {:ok, documents} <- normalize_input(input),
-         {:ok, annotator} <- build_annotator(template, validated_opts) do
+         {:ok, annotator} <-
+           build_annotator(template, {adapter_module, validated_adapter_opts}, validated_opts) do
       stream = Annotator.annotate_documents(annotator, documents, annotator_opts(validated_opts))
       {:ok, stream}
     end
@@ -126,6 +147,9 @@ defmodule LeXtract do
   Validates extraction options against the schema.
 
   Useful for validating options before processing or for debugging configuration issues.
+  Validates core options only; LLM adapter options (e.g. `:provider`, `:model`) are
+  resolved and validated separately by `extract/2` (see the `:llm` option and the
+  legacy compat shim in the module documentation).
 
   ## Parameters
 
@@ -137,12 +161,7 @@ defmodule LeXtract do
 
   ## Examples
 
-      iex> {:ok, opts} = LeXtract.validate_options(
-      ...>   prompt: "Extract",
-      ...>   model: "gpt-4o-mini",
-      ...>   provider: :openai,
-      ...>   api_key: "key"
-      ...> )
+      iex> {:ok, opts} = LeXtract.validate_options(prompt: "Extract")
       iex> Keyword.get(opts, :prompt)
       "Extract"
       iex> Keyword.get(opts, :format)
@@ -223,34 +242,47 @@ defmodule LeXtract do
     {:ok, documents}
   end
 
-  defp build_annotator(template, opts) do
-    req_llm_config = build_req_llm_config(opts)
-    annotator_opts = build_annotator_opts(opts)
-    annotator = Annotator.new(template, req_llm_config, annotator_opts)
+  defp resolve_llm(opts) do
+    core_opts = strip_llm_opts(opts)
 
-    {:ok, annotator}
+    case Keyword.fetch(opts, :llm) do
+      {:ok, llm_spec} ->
+        {adapter_module, adapter_opts} = normalize_llm_spec(llm_spec)
+        {adapter_module, adapter_opts, core_opts}
+
+      :error ->
+        {adapter_module, base_adapter_opts} =
+          normalize_llm_spec(Application.get_env(:lextract, :llm, @default_llm))
+
+        legacy_opts = Keyword.take(opts, @legacy_llm_keys)
+        adapter_opts = Keyword.merge(base_adapter_opts, legacy_opts)
+        {adapter_module, adapter_opts, core_opts}
+    end
   end
 
-  defp build_req_llm_config(opts) do
-    provider = Keyword.fetch!(opts, :provider)
-    model = Keyword.fetch!(opts, :model)
+  defp strip_llm_opts(opts), do: Keyword.drop(opts, [:llm | @legacy_llm_keys])
 
-    base_config = [
-      model: "#{provider}:#{model}",
-      provider: provider,
-      api_key: Keyword.get(opts, :api_key),
-      max_concurrency: Keyword.get(opts, :max_concurrency, 8)
-    ]
+  defp normalize_llm_spec({module, adapter_opts})
+       when is_atom(module) and is_list(adapter_opts),
+       do: {module, adapter_opts}
 
-    config =
-      base_config
-      |> maybe_add(:temperature, opts)
-      |> maybe_add(:max_tokens, opts)
+  defp normalize_llm_spec(module) when is_atom(module), do: {module, []}
 
-    case Keyword.fetch(opts, :timeout) do
-      {:ok, timeout} -> Keyword.put(config, :receive_timeout, timeout)
-      :error -> config
+  defp validate_adapter_opts(adapter_module, adapter_opts) do
+    Code.ensure_loaded(adapter_module)
+
+    if function_exported?(adapter_module, :validate_opts, 1) do
+      adapter_module.validate_opts(adapter_opts)
+    else
+      {:ok, adapter_opts}
     end
+  end
+
+  defp build_annotator(template, {adapter_module, adapter_opts}, opts) do
+    annotator_opts = build_annotator_opts(opts)
+    annotator = Annotator.new(template, {adapter_module, adapter_opts}, annotator_opts)
+
+    {:ok, annotator}
   end
 
   defp build_annotator_opts(opts) do
@@ -258,7 +290,8 @@ defmodule LeXtract do
       format: Keyword.get(opts, :format, :yaml),
       fence_output: Keyword.get(opts, :fence_output, false),
       use_structured_output: Keyword.get(opts, :use_structured_output, false),
-      attribute_suffix: Keyword.get(opts, :attribute_suffix, "_attributes")
+      attribute_suffix: Keyword.get(opts, :attribute_suffix, "_attributes"),
+      max_concurrency: Keyword.get(opts, :max_concurrency, 8)
     ]
   end
 
@@ -269,12 +302,5 @@ defmodule LeXtract do
       batch_size: Keyword.get(opts, :batch_size, 5),
       extraction_passes: Keyword.get(opts, :extraction_passes, 1)
     ]
-  end
-
-  defp maybe_add(config, key, opts) do
-    case Keyword.fetch(opts, key) do
-      {:ok, value} -> Keyword.put(config, key, value)
-      :error -> config
-    end
   end
 end
