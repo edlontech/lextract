@@ -93,7 +93,8 @@ defmodule LeXtract.MixProject do
     [
       licenses: ["MIT"],
       links: %{"GitHub" => "https://github.com/YgorCastor/lextract.git"},
-      sponsor: "ycastor.eth"
+      sponsor: "ycastor.eth",
+      files: ~w(lib mix.exs README.md CHANGELOG.md LICENSE usage-rules.md)
     ]
   end
 end
