@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.3](https://github.com/edlontech/lextract/compare/v0.1.2...v0.1.3) (2026-07-02)
+
+
+### Features
+
+* Added Usage Rules ([6d398b5](https://github.com/edlontech/lextract/commit/6d398b5ae7c8beae48a7bdf52d9d4586d401774a))
+* pluggable LLM adapter with req_llm as optional provider ([28fa882](https://github.com/edlontech/lextract/commit/28fa8826a3486cff7895c47e6637753b935d4aa2))
+
+
+### Bug Fixes
+
+* FIxed credo findings ([ff41ab7](https://github.com/edlontech/lextract/commit/ff41ab7e5bbf2a7bdab7fbdcd3c19ca3abbed263))
+* Gating ReqLLM Correctly ([f4ba228](https://github.com/edlontech/lextract/commit/f4ba228d1bdf9a73629c767292808efa7746162e))
+
 ## [0.1.2](https://github.com/YgorCastor/lextract/compare/v0.1.1...v0.1.2) (2025-11-04)
 
 
