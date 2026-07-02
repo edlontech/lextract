@@ -269,12 +269,21 @@ defmodule LeXtract do
   defp normalize_llm_spec(module) when is_atom(module), do: {module, []}
 
   defp validate_adapter_opts(adapter_module, adapter_opts) do
-    Code.ensure_loaded(adapter_module)
+    case Code.ensure_loaded(adapter_module) do
+      {:module, _} ->
+        if function_exported?(adapter_module, :validate_opts, 1) do
+          adapter_module.validate_opts(adapter_opts)
+        else
+          {:ok, adapter_opts}
+        end
 
-    if function_exported?(adapter_module, :validate_opts, 1) do
-      adapter_module.validate_opts(adapter_opts)
-    else
-      {:ok, adapter_opts}
+      {:error, _reason} ->
+        {:error,
+         LeXtract.Error.Invalid.Config.exception(
+           errors:
+             "LLM adapter #{inspect(adapter_module)} is not available; " <>
+               "add its dependency (e.g. req_llm) or configure a different :llm adapter"
+         )}
     end
   end
 
