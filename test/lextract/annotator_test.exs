@@ -93,7 +93,7 @@ defmodule LeXtract.AnnotatorTest do
       doc = Annotator.annotate_text(annotator, "John Doe works here")
 
       assert %AnnotatedDocument{} = doc
-      assert length(doc.extractions) >= 0
+      assert is_list(doc.extractions)
     end
 
     test "handles empty text" do
@@ -157,7 +157,7 @@ defmodule LeXtract.AnnotatorTest do
 
       doc = Annotator.annotate_text(annotator, "John Doe and Jane Smith work together")
 
-      assert length(doc.extractions) >= 0
+      assert is_list(doc.extractions)
     end
 
     test "handles malformed LLM response gracefully" do
@@ -398,7 +398,7 @@ defmodule LeXtract.AnnotatorTest do
         Annotator.annotate_documents(annotator, [doc], extraction_passes: 2)
         |> Enum.to_list()
 
-      assert length(annotated.extractions) >= 0
+      assert is_list(annotated.extractions)
     end
   end
 
@@ -520,7 +520,7 @@ defmodule LeXtract.AnnotatorTest do
 
       assert %AnnotatedDocument{} = doc
 
-      if length(doc.extractions) > 0 do
+      if doc.extractions != [] do
         extraction = hd(doc.extractions)
         assert extraction.extraction_class == "Person"
         assert extraction.extraction_text == "John"
@@ -605,7 +605,7 @@ defmodule LeXtract.AnnotatorTest do
       doc = Annotator.annotate_text(annotator, "Patient takes aspirin 100mg daily")
 
       assert %AnnotatedDocument{} = doc
-      assert length(doc.extractions) >= 0
+      assert is_list(doc.extractions)
     end
 
     test "handles structured output errors gracefully" do
@@ -682,7 +682,7 @@ defmodule LeXtract.AnnotatorTest do
       doc = Annotator.annotate_text(annotator, "Dr. Smith prescribed aspirin to patient")
 
       assert %AnnotatedDocument{} = doc
-      assert length(doc.extractions) >= 0
+      assert is_list(doc.extractions)
     end
 
     test "handles empty extractions in structured output" do

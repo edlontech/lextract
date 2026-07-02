@@ -252,7 +252,7 @@ defmodule LeXtract.Prompting do
 
   defp has_examples?(%__MODULE__{template: template}) do
     examples = Map.get(template, :examples) || Map.get(template, "examples") || []
-    length(examples) > 0
+    examples != []
   end
 
   defp format_extractions(%__MODULE__{format_handler: handler}, extractions) do

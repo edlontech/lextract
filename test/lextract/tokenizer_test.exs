@@ -19,7 +19,7 @@ defmodule LeXtract.TokenizerTest do
       assert is_list(encoding.tokens)
       assert is_list(encoding.ids)
       assert is_list(encoding.offsets)
-      assert length(encoding.tokens) > 0
+      assert encoding.tokens != []
       assert encoding.text == text
     end
 
@@ -29,7 +29,7 @@ defmodule LeXtract.TokenizerTest do
       {:ok, encoding} = Tokenizer.tokenize(text)
 
       assert is_list(encoding.tokens)
-      assert length(encoding.tokens) > 0
+      assert encoding.tokens != []
     end
 
     test "handles emoji characters" do
@@ -38,7 +38,7 @@ defmodule LeXtract.TokenizerTest do
       {:ok, encoding} = Tokenizer.tokenize(text)
 
       assert is_list(encoding.tokens)
-      assert length(encoding.tokens) > 0
+      assert encoding.tokens != []
       assert is_list(encoding.offsets)
     end
 
@@ -47,7 +47,7 @@ defmodule LeXtract.TokenizerTest do
 
       {:ok, encoding} = Tokenizer.tokenize(text)
 
-      assert length(encoding.tokens) > 0
+      assert encoding.tokens != []
     end
 
     test "handles combining characters" do
@@ -56,7 +56,7 @@ defmodule LeXtract.TokenizerTest do
       {:ok, encoding} = Tokenizer.tokenize(text)
 
       assert is_list(encoding.tokens)
-      assert length(encoding.tokens) > 0
+      assert encoding.tokens != []
     end
 
     test "handles empty string" do
@@ -74,8 +74,8 @@ defmodule LeXtract.TokenizerTest do
 
       {:ok, encoding} = Tokenizer.tokenize(text)
 
-      assert length(encoding.tokens) > 0
-      assert length(encoding.offsets) > 0
+      assert encoding.tokens != []
+      assert encoding.offsets != []
     end
 
     test "uses custom tokenizer when provided" do
@@ -382,7 +382,7 @@ defmodule LeXtract.TokenizerTest do
 
       {:ok, encoding} = Tokenizer.tokenize(text)
 
-      assert length(encoding.tokens) >= 0
+      assert is_list(encoding.tokens)
     end
 
     test "handles text with newlines" do
@@ -391,7 +391,7 @@ defmodule LeXtract.TokenizerTest do
       {:ok, encoding} = Tokenizer.tokenize(text)
 
       assert is_list(encoding.tokens)
-      assert length(encoding.tokens) > 0
+      assert encoding.tokens != []
     end
 
     test "handles text with tabs" do
@@ -400,7 +400,7 @@ defmodule LeXtract.TokenizerTest do
       {:ok, encoding} = Tokenizer.tokenize(text)
 
       assert is_list(encoding.tokens)
-      assert length(encoding.tokens) > 0
+      assert encoding.tokens != []
     end
 
     test "handles Chinese characters" do
@@ -408,7 +408,7 @@ defmodule LeXtract.TokenizerTest do
 
       {:ok, encoding} = Tokenizer.tokenize(text)
 
-      assert length(encoding.tokens) > 0
+      assert encoding.tokens != []
     end
 
     test "handles Arabic characters" do
@@ -417,7 +417,7 @@ defmodule LeXtract.TokenizerTest do
       {:ok, encoding} = Tokenizer.tokenize(text)
 
       assert is_list(encoding.tokens)
-      assert length(encoding.tokens) > 0
+      assert encoding.tokens != []
     end
 
     test "handles mixed scripts" do
@@ -425,7 +425,7 @@ defmodule LeXtract.TokenizerTest do
 
       {:ok, encoding} = Tokenizer.tokenize(text)
 
-      assert length(encoding.tokens) > 0
+      assert encoding.tokens != []
     end
   end
 

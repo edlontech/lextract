@@ -52,7 +52,7 @@ defmodule LeXtract.IntegrationTest do
       assert %AnnotatedDocument{} = doc
       assert doc.text == text
       assert is_list(doc.extractions)
-      assert length(doc.extractions) > 0
+      assert doc.extractions != []
 
       aspirin_extraction =
         Enum.find(doc.extractions, fn ext ->
@@ -130,12 +130,12 @@ defmodule LeXtract.IntegrationTest do
       [doc] = results
 
       assert doc.text == text
-      assert length(doc.extractions) >= 1
+      assert doc.extractions != []
 
       condition_extractions =
         Enum.filter(doc.extractions, &(&1.extraction_class == "Condition"))
 
-      assert length(condition_extractions) >= 1
+      assert condition_extractions != []
     end
 
     @tag :openai
@@ -218,7 +218,7 @@ defmodule LeXtract.IntegrationTest do
       [doc] = results
 
       assert doc.text == large_text
-      assert length(doc.extractions) > 0
+      assert doc.extractions != []
     end
 
     @tag :openai
@@ -251,7 +251,7 @@ defmodule LeXtract.IntegrationTest do
       med_extractions =
         Enum.filter(doc.extractions, &(&1.extraction_class == "Medication"))
 
-      if length(med_extractions) > 0 do
+      if med_extractions != [] do
         extraction = hd(med_extractions)
 
         if extraction.char_interval do
@@ -416,7 +416,7 @@ defmodule LeXtract.IntegrationTest do
         assert length(results) == 1
         [doc] = results
 
-        assert length(doc.extractions) >= 1
+        assert doc.extractions != []
       after
         File.rm(template_path)
       end
@@ -460,7 +460,7 @@ defmodule LeXtract.IntegrationTest do
         [doc] = results
 
         person_extractions = Enum.filter(doc.extractions, &(&1.extraction_class == "Person"))
-        assert length(person_extractions) >= 1
+        assert person_extractions != []
       after
         File.rm(template_path)
       end
@@ -577,8 +577,8 @@ defmodule LeXtract.IntegrationTest do
       conditions = Enum.filter(doc.extractions, &(&1.extraction_class == "Condition"))
       medications = Enum.filter(doc.extractions, &(&1.extraction_class == "Medication"))
 
-      assert length(conditions) >= 1
-      assert length(medications) >= 1
+      assert conditions != []
+      assert medications != []
     end
 
     @tag :openai
@@ -615,7 +615,7 @@ defmodule LeXtract.IntegrationTest do
       [doc] = results
 
       orgs = Enum.filter(doc.extractions, &(&1.extraction_class == "Organization"))
-      assert length(orgs) >= 1
+      assert orgs != []
     end
   end
 end

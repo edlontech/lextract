@@ -279,17 +279,12 @@ defmodule LeXtract.Alignment do
     needle_lower
     |> find_all_occurrences(haystack_lower, 0, [])
     |> Enum.map(fn start_idx ->
-      with interval <-
+      with interval when interval != nil <-
              token_span_to_char_interval(start_idx, length(needle_tokens), source_encoding),
-           true <- interval != nil do
-        extracted_text = CharInterval.extract(source_text, interval)
-        needle_text = reconstruct_text_from_tokens(needle_tokens)
-
-        if extracted_text == needle_text do
-          {start_idx, interval}
-        else
-          nil
-        end
+           extracted_text <- CharInterval.extract(source_text, interval),
+           needle_text <- reconstruct_text_from_tokens(needle_tokens),
+           true <- extracted_text == needle_text do
+        {start_idx, interval}
       else
         _ -> nil
       end

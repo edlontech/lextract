@@ -105,7 +105,7 @@ defmodule LeXtract.ChunkingTest do
 
       chunks = Chunking.chunk_document(doc, max_char_buffer: 30, chunk_overlap: 10)
 
-      assert length(chunks) >= 1
+      assert chunks != []
 
       Enum.each(chunks, fn chunk ->
         assert chunk.char_interval.start_pos >= 0
@@ -131,7 +131,7 @@ defmodule LeXtract.ChunkingTest do
 
       chunks = Chunking.chunk_document(doc)
 
-      assert length(chunks) >= 1
+      assert chunks != []
       assert Enum.all?(chunks, &is_struct(&1, TextChunk))
     end
 
@@ -344,7 +344,7 @@ defmodule LeXtract.ChunkingTest do
 
       chunks = Chunking.chunk_document(doc, max_char_buffer: 150, chunk_overlap: 30)
 
-      assert length(chunks) >= 1
+      assert chunks != []
 
       Enum.each(chunks, fn chunk ->
         assert String.length(chunk.text) <= 180

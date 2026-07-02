@@ -187,10 +187,10 @@ defmodule LeXtract.Chunking do
     offsets = Tokenizers.Encoding.get_offsets(encoding)
 
     token_interval =
-      if length(offsets) > 0 do
-        TokenInterval.new(0, length(offsets))
-      else
+      if offsets == [] do
         TokenInterval.new(0, 0)
+      else
+        TokenInterval.new(0, length(offsets))
       end
 
     char_interval = CharInterval.new(start_byte, end_byte)
